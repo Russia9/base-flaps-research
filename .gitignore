@@ -1,0 +1,6 @@
+# IDE files
+.zed/
+
+# MacOS files
+**/.DS_Store
+
