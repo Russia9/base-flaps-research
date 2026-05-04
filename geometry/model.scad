@@ -36,9 +36,9 @@ echo(str("Cylinder length  = ", cyl_len,   " D"));
 
 // ── Resolution ────────────────────────────────────────────────────────────────
 
-FN_BODY = 256;  // circumferential facets on fuselage
-FN_NOSE = 300;  // profile points along ogive
-FN_FIN  = 128;  // circumferential facets on fin arcs
+FN_BODY = 360;  // circumferential facets on fuselage
+FN_NOSE = 360;  // profile points along ogive
+FN_FIN  = 360;  // circumferential facets on fin arcs
 
 // ── Ogive profile ─────────────────────────────────────────────────────────────
 
