@@ -23,7 +23,7 @@ boundaryField
     inlet       { type fixedValue; value uniform 101325; }
     outlet      { type zeroGradient; }
     farfield    { type freestreamPressure; freestreamValue uniform 101325; }
-    wall        { type zeroGradient; }
+    body        { type zeroGradient; }
 }
 
 

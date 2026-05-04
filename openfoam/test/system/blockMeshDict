@@ -47,17 +47,33 @@ edges
 
 boundary
 (
+    inlet
+    {
+        type patch;
+        faces
+        (
+            (0 3 2 1)  // x = -160 face
+        );
+    }
+    outlet
+    {
+        type patch;
+        faces
+        (
+            (4 5 6 7)  // x = 1600 face
+        );
+    }
     farfield
-        {
-            type patch;
-            faces
-            (
-                (0 1 5 4)  // bottom
-                (2 3 7 6)  // top
-                (0 4 7 3)  // front
-                (1 2 6 5)  // back
-            );
-        }
+    {
+        type patch;
+        faces
+        (
+            (0 1 5 4)  // bottom
+            (2 3 7 6)  // top
+            (0 4 7 3)  // front
+            (1 2 6 5)  // back
+        );
+    }
 );
 
 mergePatchPairs

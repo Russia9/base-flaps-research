@@ -16,8 +16,8 @@
 // ── Parameters (overridable from CLI) ────────────────────────────────────────
 
 D  = 80.0;       // fuselage diameter
-N  = 4;         // number of fins [1..4]
-xi = 90;        // fin arc angle [degrees]
+N  = 2;         // number of fins [1..4]
+xi = 45;        // fin arc angle [degrees]
 LD = 1.0;       // fin length / D
 TD = 0.02;      // fin thickness / D (default 0.02)
 
@@ -118,4 +118,19 @@ module assembly() {
     }
 }
 
-assembly();
+// ── Named boundary regions for snappyHexMesh / OpenFOAM ──────────────────────
+//
+// Each module below corresponds to one named solid in the exported STL.
+// The Makefile renders each module separately and fixes the solid name via sed:
+//   openscad -D "EXPORT=\"body\"" -o body.stl model.scad
+//   sed -i '' 's/OpenSCAD_Model/body/g' body.stl
+//
+// snappyHexMeshDict geometry entry:
+//   body.stl { type triSurfaceMesh; name body; }
+
+EXPORT = "";   // set from CLI: -D "EXPORT=\"body\""
+
+module body() { assembly(); }
+
+if      (EXPORT == "body") body();
+else if (EXPORT == "")     body();   // default interactive render

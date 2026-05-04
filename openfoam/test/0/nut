@@ -9,5 +9,5 @@ boundaryField
     inlet       { type calculated; value uniform 0; }
     outlet      { type calculated; value uniform 0; }
     farfield    { type calculated; value uniform 0; }
-    wall        { type nutkWallFunction; value uniform 0; }
+    body        { type nutkWallFunction; value uniform 0; }
 }

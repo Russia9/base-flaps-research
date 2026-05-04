@@ -9,5 +9,5 @@ boundaryField
     inlet       { type fixedValue; value uniform 39; }
     outlet      { type zeroGradient; }
     farfield    { type freestream; freestreamValue uniform 39; }
-    wall        { type kqRWallFunction; value uniform 39; }
+    body        { type kqRWallFunction; value uniform 39; }
 }
