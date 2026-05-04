@@ -9,15 +9,24 @@ geometry
     body.stl
     {
         type triSurfaceMesh;
+        scale 0.001;  // STL is in mm; convert to m to match blockMesh
         name body;
+    }
+
+    wakeCylinder
+    {
+        type searchableCylinder;
+        point1 (-0.02 0.0 0.0);
+        point2 (1.03 0.0 0.0);
+        radius 0.16;
     }
 };
 
 castellatedMeshControls
 {
-    maxLocalCells   1000000;
-    maxGlobalCells  2000000;
-    minRefinementCells 10;
+    maxLocalCells   1750000;
+    maxGlobalCells  3500000;
+    minRefinementCells 5;
     maxLoadUnbalance 0.10;
     nCellsBetweenLevels 3;
     resolveFeatureAngle 30;
@@ -26,7 +35,7 @@ castellatedMeshControls
     (
         {
             file "body.eMesh";
-            level 3;
+            level 4;
         }
     );
 
@@ -34,22 +43,21 @@ castellatedMeshControls
     {
         body
         {
-            level (4 5);  // min max refinement levels
+            level (5 6);
         }
     }
 
     refinementRegions
     {
-        // refine the wake behind the base
-        body
+        // Refine a cylindrical wake region behind the 800 mm body base.
+        wakeCylinder
         {
             mode inside;
             levels ((1E15 4));
         }
     }
 
-    locationInMesh (0.4 0.05 0.0);  // point inside domain, outside body
-                               // x=400mm = mid-cylinder, well away from axis
+    locationInMesh (0.4 0.05 0.0);  // inside fluid, outside the 40 mm body radius
     allowFreeStandingZoneFaces true;
 }
 

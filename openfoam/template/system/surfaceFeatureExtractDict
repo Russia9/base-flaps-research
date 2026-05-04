@@ -2,6 +2,7 @@ FoamFile { version 2.0; format ascii; class dictionary; object surfaceFeatureExt
 
 body.stl
 {
+    scale               0.001;
     extractionMethod    extractFromSurface;
     extractFromSurfaceCoeffs { includedAngle 150; }
     writeObj yes;

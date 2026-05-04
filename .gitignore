@@ -4,3 +4,5 @@
 # MacOS files
 **/.DS_Store
 
+openfoam/
+!openfoam/template/

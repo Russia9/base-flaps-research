@@ -18,31 +18,66 @@ scale   0.001;
 
 vertices
 (
-    // x: -160 (inlet) to 1600 (outlet)
-    // y/z: -640 to 640 (farfield, 8D)
+    // Axial extent: x = -160 mm (-2D) to 1600 mm (+10D behind the base)
+    // Cylindrical farfield radius: 640 mm = 8D
+    // O-grid core half-width: 320 mm = 4D
+    // Circular boundary diagonal intercept: 640 / sqrt(2) = 452.548 mm
 
-    // rear face (x = -160)
-    (-160 -640 -640)  // 0
-    ( -160  640 -640)  // 1
-    ( -160  640  640)  // 2
-    (-160 -640  640)  // 3
+    // inlet plane (x = -160 mm)
+    (-160 -320.000 -320.000)  // 0  inner SW
+    (-160  320.000 -320.000)  // 1  inner SE
+    (-160  320.000  320.000)  // 2  inner NE
+    (-160 -320.000  320.000)  // 3  inner NW
+    (-160 -452.548 -452.548)  // 4  outer SW
+    (-160  452.548 -452.548)  // 5  outer SE
+    (-160  452.548  452.548)  // 6  outer NE
+    (-160 -452.548  452.548)  // 7  outer NW
 
-    // front face (x = 1600)
-    (1600 -640 -640)  // 4
-    (1600  640 -640)  // 5
-    (1600  640  640)  // 6
-    (1600 -640  640)  // 7
+    // outlet plane (x = 1600 mm)
+    (1600 -320.000 -320.000)  // 8  inner SW
+    (1600  320.000 -320.000)  // 9  inner SE
+    (1600  320.000  320.000)  // 10 inner NE
+    (1600 -320.000  320.000)  // 11 inner NW
+    (1600 -452.548 -452.548)  // 12 outer SW
+    (1600  452.548 -452.548)  // 13 outer SE
+    (1600  452.548  452.548)  // 14 outer NE
+    (1600 -452.548  452.548)  // 15 outer NW
 );
 
 blocks
 (
-    hex (0 4 5 1 3 7 6 2)
-    (80 64 64)              // cells: x × y × z
+    hex (0 8 9 1 3 11 10 2)
+    (80 32 32)
+    simpleGrading (1 1 1)
+
+    hex (4 12 13 5 0 8 9 1)
+    (80 32 16)
+    simpleGrading (1 1 1)
+
+    hex (1 9 13 5 2 10 14 6)
+    (80 16 32)
+    simpleGrading (1 1 1)
+
+    hex (3 11 10 2 7 15 14 6)
+    (80 32 16)
+    simpleGrading (1 1 1)
+
+    hex (4 12 8 0 7 15 11 3)
+    (80 16 32)
     simpleGrading (1 1 1)
 );
 
 edges
 (
+    arc 7 6   (-160   0.000  640.000)
+    arc 6 5   (-160 640.000    0.000)
+    arc 4 5   (-160   0.000 -640.000)
+    arc 4 7   (-160 -640.000    0.000)
+
+    arc 15 14 (1600   0.000  640.000)
+    arc 14 13 (1600 640.000    0.000)
+    arc 12 13 (1600   0.000 -640.000)
+    arc 12 15 (1600 -640.000    0.000)
 );
 
 boundary
@@ -52,7 +87,11 @@ boundary
         type patch;
         faces
         (
-            (0 3 2 1)  // x = -160 face
+            (0 3 2 1)
+            (4 0 1 5)
+            (1 2 6 5)
+            (3 7 6 2)
+            (4 7 3 0)
         );
     }
     outlet
@@ -60,7 +99,11 @@ boundary
         type patch;
         faces
         (
-            (4 5 6 7)  // x = 1600 face
+            (8 9 10 11)
+            (12 13 9 8)
+            (9 13 14 10)
+            (11 10 14 15)
+            (12 8 11 15)
         );
     }
     farfield
@@ -68,10 +111,10 @@ boundary
         type patch;
         faces
         (
-            (0 1 5 4)  // bottom
-            (2 3 7 6)  // top
-            (0 4 7 3)  // front
-            (1 2 6 5)  // back
+            (7 15 14 6)
+            (6 14 13 5)
+            (4 5 13 12)
+            (4 12 15 7)
         );
     }
 );
