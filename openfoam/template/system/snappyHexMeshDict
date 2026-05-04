@@ -13,22 +13,30 @@ geometry
         name body;
     }
 
-    wakeCylinder
+    refinementCylinder
     {
         type searchableCylinder;
-        point1 (-0.02 0.0 0.0);
-        point2 (1.03 0.0 0.0);
-        radius 0.16;
+        point1 (-0.20 0.0 0.0);
+        point2 (2.00 0.0 0.0);
+        radius 0.24;
+    }
+
+    nearBodyCylinder
+    {
+        type searchableCylinder;
+        point1 (-0.10 0.0 0.0);
+        point2 (1.20 0.0 0.0);
+        radius 0.12;
     }
 };
 
 castellatedMeshControls
 {
-    maxLocalCells   1750000;
-    maxGlobalCells  3500000;
+    maxLocalCells   3000000;
+    maxGlobalCells  3000000;
     minRefinementCells 5;
     maxLoadUnbalance 0.10;
-    nCellsBetweenLevels 3;
+    nCellsBetweenLevels 2;
     resolveFeatureAngle 30;
 
     features
@@ -43,17 +51,24 @@ castellatedMeshControls
     {
         body
         {
-            level (5 6);
+            level (4 5);
         }
     }
 
     refinementRegions
     {
-        // Refine a cylindrical wake region behind the 800 mm body base.
-        wakeCylinder
+        // Broad refinement from upstream of the nose through 1.5L downstream.
+        refinementCylinder
         {
             mode inside;
-            levels ((1E15 4));
+            levels ((1E15 1));
+        }
+
+        // Stronger nested refinement around the body and immediate wake.
+        nearBodyCylinder
+        {
+            mode inside;
+            levels ((1E15 2));
         }
     }
 
