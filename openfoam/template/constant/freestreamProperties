@@ -9,23 +9,21 @@ FoamFile
 {
     version     2.0;
     format      ascii;
-    class       volScalarField;
-    object      p;
+    class       dictionary;
+    object      freestreamProperties;
 }
-#include "../constant/freestreamProperties"
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-dimensions      [1 -1 -2 0 0 0 0];
+// Editable per case ---------------------------------------------------------
+pInf        101325;        // Pa
+TInf        288.15;        // K
+UInfMag     510;           // m/s   (Mach 1.5 ≈ 510, M2 ≈ 680, M2.5 ≈ 850)
+UInf        (510 0 0);     // x-component must equal UInfMag
+RGas        287.0;         // J/(kg·K) dry air
 
-internalField   uniform $pInf;
-
-boundaryField
-{
-    inlet       { type fixedValue; value uniform $pInf; }
-    outlet      { type zeroGradient; }
-    farfield    { type freestreamPressure; freestreamValue uniform $pInf; }
-    body        { type zeroGradient; }
-}
+// Derived (do not edit) -----------------------------------------------------
+rhoInf      #eval{ $pInf / ($RGas * $TInf) };
+qInf        #eval{ 0.5 * $rhoInf * $UInfMag * $UInfMag };
 
 
 // ************************************************************************* //

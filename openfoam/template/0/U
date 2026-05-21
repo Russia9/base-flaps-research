@@ -12,17 +12,18 @@ FoamFile
     class       volVectorField;
     object      U;
 }
+#include "../constant/freestreamProperties"
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 dimensions      [0 1 -1 0 0 0 0];
 
-internalField   uniform (510 0 0);
+internalField   uniform $UInf;
 
 boundaryField
 {
-    inlet       { type fixedValue; value uniform (510 0 0); }
+    inlet       { type fixedValue; value uniform $UInf; }
     outlet      { type zeroGradient; }
-    farfield    { type freestream; freestreamValue uniform (510 0 0); }
+    farfield    { type freestream; freestreamValue uniform $UInf; }
     body        { type noSlip; }
 }
 

@@ -65,16 +65,16 @@ Total: 4 × 3 × 3 × 3 = 108 cases
 
 ## Output Coefficients
 
-All coefficients use **D** as the reference length and **D²** (π D²/4) as the reference area. The moment reference point is the **nose tip**.
+All coefficients use **D** as the reference length and **πD²/4** as the reference area. The moment reference point is the **nose tip** at the origin. Body-axis convention: +X axial (drag), +Y lateral (first fin), +Z lateral.
 
 | Coefficient | Description |
 |---|---|
-| C_x | Axial force (drag) coefficient |
-| C_y | Normal force (lift) coefficient |
-| C_b | Base pressure coefficient |
-| m_z | Pitching moment coefficient |
+| C_x | Axial force coefficient (drag) |
+| C_y, C_z | Lateral force coefficients |
+| M_x | Rolling moment coefficient |
+| M_y, M_z | Pitching / yawing moment coefficients |
 
-For symmetric configurations (N = 2, 4 at 0° AoA) C_y and m_z will be zero by symmetry. Non-zero values are expected for N = 1 and N = 3.
+All six are written per time step by `scripts/post_process.py` to `results/<case>/coefficients.csv`, along with split pressure/viscous components. For symmetric configurations (N = 2, 4 at 0° AoA) the off-axial components vanish by symmetry; non-zero values are expected for N = 1 and N = 3.
 
 ## Toolchain
 
@@ -82,35 +82,90 @@ For symmetric configurations (N = 2, 4 at 0° AoA) C_y and m_z will be zero by s
 |---|---|
 | Parametric geometry | OpenSCAD |
 | Surface mesh export | STL via OpenSCAD |
-| Background mesh | blockMesh (OpenFOAM) |
-| Volume mesh | snappyHexMesh (OpenFOAM) |
-| CFD solver | rhoCentralFoam (OpenFOAM) |
+| Background mesh | blockMesh (OpenFOAM v2512) |
+| Volume mesh | snappyHexMesh (OpenFOAM v2512) |
+| CFD solver | rhoCentralFoam (OpenFOAM v2512) |
 | Turbulence model | k-ω SST |
-| Cloud provider | Scaleway |
-| Infrastructure | Terraform |
+| Post-processing | Python 3 (stdlib only) |
+| Visualization | ParaView (open `case.foam`) |
+| Primary runtime | Linux with OpenFOAM v2512 sourced |
 
 ## Infrastructure
 
-Scaleway instances act as stateless workers. Each worker pulls one case at a time from a shared job queue, runs the full pipeline (geometry → mesh → solve → post-process), uploads results, and picks up the next case. Instances are provisioned at the start of a batch run and terminated when the queue is empty.
+This repository currently implements the local OpenFOAM workflow only. Cloud
+workers, job queues, object-store uploads, and Terraform provisioning are future
+work unless corresponding files are added.
 
-```
-[Job queue] → [Worker 1]  →  [Results store]
-            → [Worker 2]  →
-            → [Worker N]  →
-```
-
-## Repository Structure (planned)
+## Repository Structure
 
 ```
 base-flaps-research/
-├── geometry/          # OpenSCAD models
+├── geometry/
+│   └── model.scad              # Parametric fuselage + fins (CLI-overridable: N, xi, LD, TD, D)
 ├── openfoam/
-│   ├── template/      # Base case template (solver settings, BCs)
-│   └── cases/         # Generated cases (gitignored)
+│   └── template/               # Base case (solver settings, BCs, function objects)
+│       ├── 0/                  # U, p, T, k, omega, nut, alphat initial/boundary fields
+│       ├── constant/
+│       │   ├── caseProperties        # geometry/Mach parameters consumed by rebuild-mesh.sh
+│       │   ├── freestreamProperties   # SINGLE source of truth (pInf, TInf, UInfMag, UInf, RGas)
+│       │   ├── thermophysicalProperties
+│       │   └── turbulenceProperties
+│       └── system/
+│           ├── controlDict             # functions { #include "postProcess" }
+│           ├── postProcess             # forces, MachNo, schlieren, magGradP, Cp
+│           ├── blockMeshDict, snappyHexMeshDict, decomposeParDict, …
 ├── scripts/
-│   ├── generate_cases.py   # Expand parameter space → case directories
-│   ├── run_mesh.sh          # blockMesh + snappyHexMesh for one case
-│   └── post_process.py      # Extract C_x, C_y, C_b, m_z from results
-├── infra/             # Terraform + worker bootstrap scripts
-└── results/           # Aggregated coefficient tables (CSV)
+│   ├── create_case.py          # template → parameterized case
+│   ├── sweep.py                # enumerate/create the 108-case sweep
+│   └── post_process.py         # forces.dat → results/<case>/coefficients.csv (Cx..Mz)
+├── rebuild-mesh.sh             # OpenSCAD → STL → blockMesh + parallel snappyHexMesh -overwrite + decompose
+├── run-simulation.sh           # dry-run/solve → reconstructPar → post_process
+└── results/                    # Per-case coefficient CSVs (written by post_process.py)
 ```
+
+Anything under `openfoam/` other than `openfoam/template/` is gitignored. Generated cases live under `openfoam/test` or `openfoam/cases/*`.
+
+## Quickstart
+
+Use a Linux shell with OpenFOAM v2512 sourced, for example:
+
+```bash
+source /path/to/OpenFOAM-v2512/etc/bashrc
+```
+
+Create, mesh, validate, and solve the baseline case:
+
+```bash
+python3 scripts/create_case.py --force --case openfoam/test --N 2 --xi 45 --LD 1.0 --TD 0.02 --Mach 1.5
+./rebuild-mesh.sh openfoam/test
+./run-simulation.sh --dry-run openfoam/test
+./run-simulation.sh openfoam/test
+```
+
+`rebuild-mesh.sh` reads geometry from `constant/caseProperties`, runs parallel `snappyHexMesh -overwrite`, reconstructs the final snapped mesh into `constant/polyMesh`, then decomposes that final mesh for the solver. The scripts default to `NP=6` so two cores remain free on an 8-core workstation; override with `NP=<n>` if needed. `MAX_CELLS=2000000` is enforced by default after `checkMesh`; set `MAX_CELLS=0` to disable the guard for exploratory runs. `run-simulation.sh` cleans prior run outputs from the case while preserving the mesh and `0/` fields. If OpenFOAM's parallel dry-run path hits the known `MPI_ERR_TRUNCATE` failure, `run-simulation.sh --dry-run` retries a serial dry-run on the reconstructed master mesh and keeps both attempts in `log.rhoCentralFoam.dryRun`.
+
+The default template intentionally keeps `addLayers false`. This is the bounded-cell validation mesh for the sweep. Boundary-layer meshes should be introduced as a separate higher-cost profile with an explicit y+ target and cell budget.
+
+List the full 108-case command set:
+
+```bash
+python3 scripts/sweep.py --dry-run
+```
+
+Create all case directories without meshing or solving them:
+
+```bash
+python3 scripts/sweep.py --force
+```
+
+Each generated case stores Mach in `constant/caseProperties`; `scripts/create_case.py` updates both `UInfMag` and the literal `UInf` vector in `constant/freestreamProperties`.
+
+## Validation Expectations
+
+Before trusting coefficients from a case, require:
+
+- `checkMesh -constant -noZero` reports `Mesh OK`.
+- `./run-simulation.sh --dry-run <case>` exits cleanly.
+- `postProcessing/forces` contains non-empty force and moment logs.
+- `results/<case>/coefficients.csv` is non-empty.
+- Wall-function y+ is reviewed on representative cases before using wall-sensitive quantities; the default sweep mesh does not add boundary-layer cells.

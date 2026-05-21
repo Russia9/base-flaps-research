@@ -9,23 +9,18 @@ FoamFile
 {
     version     2.0;
     format      ascii;
-    class       volScalarField;
-    object      p;
+    class       dictionary;
+    object      caseProperties;
 }
-#include "../constant/freestreamProperties"
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-dimensions      [1 -1 -2 0 0 0 0];
-
-internalField   uniform $pInf;
-
-boundaryField
-{
-    inlet       { type fixedValue; value uniform $pInf; }
-    outlet      { type zeroGradient; }
-    farfield    { type freestreamPressure; freestreamValue uniform $pInf; }
-    body        { type zeroGradient; }
-}
+D           80.0;   // mm
+N           2;
+xi          45;
+LD          1.0;
+TD          0.02;
+Mach        1.5;
+gamma       1.4;
 
 
 // ************************************************************************* //

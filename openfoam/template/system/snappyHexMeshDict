@@ -2,7 +2,7 @@ FoamFile { version 2.0; format ascii; class dictionary; object snappyHexMeshDict
 
 castellatedMesh true;
 snap            true;
-addLayers       false;  // add later once mesh is working
+addLayers       false;  // boundary-layer meshing is an optional higher-cost profile
 
 geometry
 {
@@ -140,6 +140,7 @@ meshQualityControls
     minFaceWeight       0.05;
     minVolRatio         0.01;
     minTriangleTwist    -1;
+
     nSmoothScale        4;
     errorReduction      0.75;
 }

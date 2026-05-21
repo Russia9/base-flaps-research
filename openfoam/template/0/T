@@ -12,17 +12,18 @@ FoamFile
     class       volScalarField;
     object      T;
 }
+#include "../constant/freestreamProperties"
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 dimensions      [0 0 0 1 0 0 0];
 
-internalField   uniform 288.15;
+internalField   uniform $TInf;
 
 boundaryField
 {
-    inlet       { type fixedValue; value uniform 288.15; }
+    inlet       { type fixedValue; value uniform $TInf; }
     outlet      { type zeroGradient; }
-    farfield    { type freestream; freestreamValue uniform 288.15; }
+    farfield    { type freestream; freestreamValue uniform $TInf; }
     body        { type zeroGradient; }
 }
 

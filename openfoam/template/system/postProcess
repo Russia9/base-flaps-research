@@ -1,0 +1,68 @@
+// Function-object definitions included into controlDict's functions {} block.
+// Freestream values are included at the controlDict root and referenced here.
+
+forces
+{
+    type            forces;
+    libs            (forces);
+    patches         (body);
+    writeControl    timeStep;
+    writeInterval   1;
+    log             no;
+    CofR            (0 0 0);
+    rho             rhoInf;
+    rhoInf          $rhoInf;
+}
+
+MachNo
+{
+    type            MachNo;
+    libs            (fieldFunctionObjects);
+    writeControl    writeTime;
+}
+
+gradRho
+{
+    type            grad;
+    libs            (fieldFunctionObjects);
+    field           rho;
+    writeControl    writeTime;
+}
+
+magGradRho
+{
+    type            mag;
+    libs            (fieldFunctionObjects);
+    field           grad(rho);
+    result          schlieren;
+    writeControl    writeTime;
+}
+
+gradP
+{
+    type            grad;
+    libs            (fieldFunctionObjects);
+    field           p;
+    writeControl    writeTime;
+}
+
+magGradP
+{
+    type            mag;
+    libs            (fieldFunctionObjects);
+    field           grad(p);
+    result          magGradP;
+    writeControl    writeTime;
+}
+
+pressureCoeff
+{
+    type            pressure;
+    libs            (fieldFunctionObjects);
+    mode            staticCoeff;
+    result          Cp;
+    rhoInf          $rhoInf;
+    pInf            $pInf;
+    UInf            $UInf;
+    writeControl    writeTime;
+}

@@ -30,11 +30,20 @@ solvers
         relTol          0.01;
     }
 
-    h
+    e
     {
         $U;
         tolerance       1e-10;
-        relTol          0;
+        relTol          0.1;
+    }
+
+    "(k|omega)"
+    {
+        solver          smoothSolver;
+        smoother        GaussSeidel;
+        nSweeps         2;
+        tolerance       1e-08;
+        relTol          0.1;
     }
 }
 

@@ -20,29 +20,29 @@ vertices
 (
     // Axial extent: x = -800 mm (-1L upstream of the nose) to 5600 mm
     // (+6L behind the 800 mm body base, with L = 10D and D = 80 mm)
-    // Cylindrical farfield radius: 400 mm = 5D (10D diameter)
-    // O-grid core half-width: 200 mm = 2.5D
-    // Circular boundary diagonal intercept: 400 / sqrt(2) = 282.843 mm
+    // Cylindrical farfield radius: 600 mm = 7.5D (15D diameter)
+    // O-grid core half-width: 300 mm = 3.75D
+    // Circular boundary diagonal intercept: 600 / sqrt(2) = 424.264 mm
 
     // inlet plane (x = -800 mm)
-    (-800 -200.000 -200.000)  // 0  inner SW
-    (-800  200.000 -200.000)  // 1  inner SE
-    (-800  200.000  200.000)  // 2  inner NE
-    (-800 -200.000  200.000)  // 3  inner NW
-    (-800 -282.843 -282.843)  // 4  outer SW
-    (-800  282.843 -282.843)  // 5  outer SE
-    (-800  282.843  282.843)  // 6  outer NE
-    (-800 -282.843  282.843)  // 7  outer NW
+    (-800 -300.000 -300.000)  // 0  inner SW
+    (-800  300.000 -300.000)  // 1  inner SE
+    (-800  300.000  300.000)  // 2  inner NE
+    (-800 -300.000  300.000)  // 3  inner NW
+    (-800 -424.264 -424.264)  // 4  outer SW
+    (-800  424.264 -424.264)  // 5  outer SE
+    (-800  424.264  424.264)  // 6  outer NE
+    (-800 -424.264  424.264)  // 7  outer NW
 
     // outlet plane (x = 5600 mm)
-    (5600 -200.000 -200.000)  // 8  inner SW
-    (5600  200.000 -200.000)  // 9  inner SE
-    (5600  200.000  200.000)  // 10 inner NE
-    (5600 -200.000  200.000)  // 11 inner NW
-    (5600 -282.843 -282.843)  // 12 outer SW
-    (5600  282.843 -282.843)  // 13 outer SE
-    (5600  282.843  282.843)  // 14 outer NE
-    (5600 -282.843  282.843)  // 15 outer NW
+    (5600 -300.000 -300.000)  // 8  inner SW
+    (5600  300.000 -300.000)  // 9  inner SE
+    (5600  300.000  300.000)  // 10 inner NE
+    (5600 -300.000  300.000)  // 11 inner NW
+    (5600 -424.264 -424.264)  // 12 outer SW
+    (5600  424.264 -424.264)  // 13 outer SE
+    (5600  424.264  424.264)  // 14 outer NE
+    (5600 -424.264  424.264)  // 15 outer NW
 );
 
 blocks
@@ -70,15 +70,15 @@ blocks
 
 edges
 (
-    arc 7 6   (-800   0.000  400.000)
-    arc 6 5   (-800 400.000    0.000)
-    arc 4 5   (-800   0.000 -400.000)
-    arc 4 7   (-800 -400.000    0.000)
+    arc 7 6   (-800   0.000  600.000)
+    arc 6 5   (-800 600.000    0.000)
+    arc 4 5   (-800   0.000 -600.000)
+    arc 4 7   (-800 -600.000    0.000)
 
-    arc 15 14 (5600   0.000  400.000)
-    arc 14 13 (5600 400.000    0.000)
-    arc 12 13 (5600   0.000 -400.000)
-    arc 12 15 (5600 -400.000    0.000)
+    arc 15 14 (5600   0.000  600.000)
+    arc 14 13 (5600 600.000    0.000)
+    arc 12 13 (5600   0.000 -600.000)
+    arc 12 15 (5600 -600.000    0.000)
 );
 
 boundary
