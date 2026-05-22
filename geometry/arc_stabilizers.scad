@@ -8,35 +8,13 @@
  *
  * All dimensions in millimetres.
  *
- * Changelog
- * ---------
- * v3 (this file)
- *   - Added FN_CYL: axial cylinder subdivision.
- *     Without it the cylinder was one 570 mm × 2 mm quad → 290:1 aspect ratio,
- *     source of the ~5% sliver population in surfaceCheck.
- *     FN_CYL = ceil(cyl_len / circ_step) gives ~1:1 quads on the cylinder.
- *   - Increased FN_NOSE to 120 (arc-length of ogive ÷ target edge ≈ 120).
- *     Near-tip slivers (r < 2 mm) are unavoidable with a sharp nose and are
- *     sub-cell for any realistic snappyHexMesh refinement; they don't affect
- *     the flow solution.
- *   - FN_HI defaults to 128 (not 360) because 2πR/128 ≈ 2 mm matches typical
- *     finest-cell size; going to 360 multiplies triangle count 8× with no CFD
- *     benefit unless your cells are < 0.7 mm.
- *
- * v2
- *   - root_edge embedded inside fuselage (was flush → degenerate CSG edge).
- *   - Consistent polyhedron face winding (non-manifold STL fix).
- *   - Coplanar root/tip caps (no non-planar quads).
- *
- * v1
- *   - Initial parametric rewrite.
  */
 
 // ── User parameters ───────────────────────────────────────────────────────────
 
 D             = 80.0;   // fuselage outer diameter, mm
 N             = 4;      // number of stabilizers
-xi            = 90;     // stabilizer arc span, degrees
+xi            = 180;     // stabilizer arc span, degrees
 L             = 140.0;  // axial stabilizer chord length, mm
 
 R_in          = 36.0;   // inner arc radius of full-thickness section
