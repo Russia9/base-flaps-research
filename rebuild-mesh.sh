@@ -3,23 +3,53 @@ set -euo pipefail
 
 # Rebuild mesh artifacts for an existing case directory.
 #
-# Usage: ./rebuild-mesh.sh [case-dir]
+# Usage: ./rebuild-mesh.sh [--geometry path/to/model.scad] [case-dir]
 #
 # If the case directory does not exist, it is initialized from openfoam/template.
 # Geometry parameters are read from constant/caseProperties.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-CASE_ARG=${1:-openfoam/test}
+CASE_ARG=openfoam/test
 NP=${NP:-6}
 MAX_CELLS=${MAX_CELLS:-2000000}
+
+TEMPLATE="$ROOT/openfoam/template"
+GEOMETRY=${GEOMETRY:-"$ROOT/geometry/model.scad"}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --geometry)
+            [ "$#" -ge 2 ] || {
+                echo "error: --geometry requires a path" >&2
+                exit 2
+            }
+            GEOMETRY=$2
+            shift
+            ;;
+        -h|--help)
+            sed -n '1,8p' "$0"
+            exit 0
+            ;;
+        -*)
+            echo "error: unknown option: $1" >&2
+            exit 2
+            ;;
+        *)
+            CASE_ARG=$1
+            ;;
+    esac
+    shift
+done
+
+case "$GEOMETRY" in
+    /*) ;;
+    *)  GEOMETRY="$ROOT/$GEOMETRY" ;;
+esac
 
 case "$CASE_ARG" in
     /*) CASE=$CASE_ARG ;;
     *)  CASE="$ROOT/$CASE_ARG" ;;
 esac
-
-TEMPLATE="$ROOT/openfoam/template"
-GEOMETRY="$ROOT/geometry/model.scad"
 
 usage_error() {
     echo "error: $*" >&2
@@ -46,14 +76,23 @@ foam_scalar() {
     fi
 }
 
-strip_empty_frozen_points_zone() {
+strip_frozen_points_zone() {
     local mesh_dir=$1
     local zone_file="$mesh_dir/pointZones"
 
     [ -f "$zone_file" ] || return 0
-    grep -q "names[[:space:]]*( frozenPoints );" "$zone_file" || return 0
-    grep -q "pointLabels[[:space:]]*List<label>[[:space:]]*0;" "$zone_file" || return 0
+    grep -q "frozenPoints" "$zone_file" || return 0
     rm -f "$zone_file"
+}
+
+strip_frozen_points_zones() {
+    local mesh_dir
+
+    strip_frozen_points_zone constant/polyMesh
+    for mesh_dir in processor*/constant/polyMesh; do
+        [ -d "$mesh_dir" ] || continue
+        strip_frozen_points_zone "$mesh_dir"
+    done
 }
 
 [ -d "$TEMPLATE" ] || usage_error "missing template directory: $TEMPLATE"
@@ -87,7 +126,8 @@ LD=$(foam_scalar "$PARAMS" LD 1.0)
 TD=$(foam_scalar "$PARAMS" TD 0.02)
 
 echo "case      : $CASE"
-echo "geometry  : D=${D}mm N=$N xi=$XI LD=$LD TD=$TD"
+echo "geometry  : $GEOMETRY"
+echo "params    : D=${D}mm N=$N xi=$XI LD=$LD TD=$TD"
 echo "parallel  : $NP ranks"
 
 for path in \
@@ -123,7 +163,7 @@ blockMesh
 decomposePar -force
 mpirun -np "$NP" snappyHexMesh -parallel -overwrite 2>&1 | tee log.snappyHexMesh
 reconstructParMesh -constant 2>&1 | tee log.reconstructParMesh
-strip_empty_frozen_points_zone constant/polyMesh
+strip_frozen_points_zones
 
 if ! grep -q "body" constant/polyMesh/boundary; then
     echo "error: reconstructed constant/polyMesh is missing the body patch" >&2
@@ -132,6 +172,7 @@ fi
 
 rm -rf processor*
 decomposePar -force
+strip_frozen_points_zones
 
 if ! grep -q "body" processor0/constant/polyMesh/boundary; then
     echo "error: decomposed mesh is missing the body patch" >&2

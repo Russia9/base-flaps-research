@@ -14,13 +14,14 @@
 // Parameters overridable from the OpenSCAD CLI.
 D            = 80.0;   // fuselage diameter
 N            = 4;      // number of stabilizers
-xi           = 90;     // stabilizer arc angle, degrees
+xi           = 45;     // stabilizer arc angle, degrees
 L            = 140.0;  // axial stabilizer length
 R_in         = 36.0;   // inner radius of full-thickness section
 R_edge       = 38.0;   // radius of sharp leading/trailing edge
 R_out        = 40.0;   // outer radius of full-thickness section
 chamfer_len  = 2.0;    // 2 mm axial taper gives 45 deg chamfers
-hinge_radius = R_out;  // attachment axis sits on the fuselage surface
+root_overlap = 1.0;    // finite overlap into fuselage avoids line-contact STL
+hinge_radius = R_out - root_overlap;
 deploy_angle = 90.0;   // outward swing angle from the stowed shell position
 
 // Derived fuselage constants.
@@ -66,9 +67,9 @@ wing_end   = total_len;
 // Radius-vs-axial profile for the shell panel before deployment. Each axial
 // end collapses to R_edge, forming a sharp leading/trailing edge instead of a
 // blunt surface. With R36/R38/R40 and chamfer_len=2 mm, the chamfer faces are
-// 45 degrees. The whole panel is then swung outward about a long hinge axis on
-// the fuselage radius. For the first stabilizer this axis is at +Y; the other
-// three are rotations onto the remaining OY/OZ fuselage intersections.
+// 45 degrees. The whole panel is swung outward about a long hinge axis slightly
+// inside the fuselage, giving a finite solid overlap at the root. The visible
+// root remains at the OY/OZ fuselage intersections after the boolean union.
 module stabilizer_profile() {
     assert(R_in < R_edge && R_edge < R_out,
         "Require R_in < R_edge < R_out");
@@ -117,6 +118,7 @@ module stabilizers() {
 }
 
 module assembly() {
+    render(convexity = 10)
     rotate([0, 90, 0])
     union() {
         fuselage();
