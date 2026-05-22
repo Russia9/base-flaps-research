@@ -157,7 +157,7 @@ openscad \
 pushd "$CASE" >/dev/null
 
 foamDictionary system/decomposeParDict -entry numberOfSubdomains -set "$NP" >/dev/null
-surfaceClean constant/triSurface/body.stl 1e-4 1e-4 constant/triSurface/body.stl
+surfaceClean constant/triSurface/body.stl 5e-05 1e-4 constant/triSurface/body.stl
 surfaceFeatureExtract
 blockMesh
 decomposePar -force

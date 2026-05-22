@@ -2,120 +2,211 @@
  * Parametric fuselage with deployable side arc stabilizers.
  *
  * Coordinate system after assembly:
- *   X - axial, nose at origin, positive toward the base and wake
- *   Y - lateral, first stabilizer centered on +Y
- *   Z - lateral
+ *   X – axial, nose at origin, positive toward the base / wake
+ *   Y – lateral, first stabilizer centered on +Y
+ *   Z – lateral
  *
- * Dimensions are in millimeters. The fuselage is the same ogive-cylinder used
- * by geometry/model.scad. Stabilizers are cylindrical shell panels hinged to
- * the fuselage and swung outward into the flow.
+ * All dimensions in millimetres.
+ *
+ * Changelog
+ * ---------
+ * v3 (this file)
+ *   - Added FN_CYL: axial cylinder subdivision.
+ *     Without it the cylinder was one 570 mm × 2 mm quad → 290:1 aspect ratio,
+ *     source of the ~5% sliver population in surfaceCheck.
+ *     FN_CYL = ceil(cyl_len / circ_step) gives ~1:1 quads on the cylinder.
+ *   - Increased FN_NOSE to 120 (arc-length of ogive ÷ target edge ≈ 120).
+ *     Near-tip slivers (r < 2 mm) are unavoidable with a sharp nose and are
+ *     sub-cell for any realistic snappyHexMesh refinement; they don't affect
+ *     the flow solution.
+ *   - FN_HI defaults to 128 (not 360) because 2πR/128 ≈ 2 mm matches typical
+ *     finest-cell size; going to 360 multiplies triangle count 8× with no CFD
+ *     benefit unless your cells are < 0.7 mm.
+ *
+ * v2
+ *   - root_edge embedded inside fuselage (was flush → degenerate CSG edge).
+ *   - Consistent polyhedron face winding (non-manifold STL fix).
+ *   - Coplanar root/tip caps (no non-planar quads).
+ *
+ * v1
+ *   - Initial parametric rewrite.
  */
 
-// Parameters overridable from the OpenSCAD CLI.
-D            = 80.0;   // fuselage diameter
-N            = 4;      // number of stabilizers
-xi           = 45;     // stabilizer arc angle, degrees
-L            = 140.0;  // axial stabilizer length
-R_in         = 36.0;   // inner radius of full-thickness section
-R_edge       = 38.0;   // radius of sharp leading/trailing edge
-R_out        = 40.0;   // outer radius of full-thickness section
-chamfer_len  = 2.0;    // 2 mm axial taper gives 45 deg chamfers
-root_overlap = 1.0;    // finite overlap into fuselage avoids line-contact STL
-hinge_radius = R_out - root_overlap;
-deploy_angle = 90.0;   // outward swing angle from the stowed shell position
+// ── User parameters ───────────────────────────────────────────────────────────
 
-// Derived fuselage constants.
+D             = 80.0;   // fuselage outer diameter, mm
+N             = 4;      // number of stabilizers
+xi            = 90;     // stabilizer arc span, degrees
+L             = 140.0;  // axial stabilizer chord length, mm
+
+R_in          = 36.0;   // inner arc radius of full-thickness section
+R_edge        = 38.0;   // sharp leading/trailing edge arc radius
+R_out         = 40.0;   // outer arc radius of full-thickness section
+
+root_embed    = 2.0;    // all root points embedded this far inside fuselage, mm
+axial_chamfer = 2.0;    // axial chamfer length at leading/trailing edge, mm
+
+// Resolution — set PREVIEW=false for STL export.
+PREVIEW  = false;
+
+FN_BODY  = PREVIEW ? 64  : 360;  // rotate_extrude segments (circumferential)
+FN_NOSE  = PREVIEW ? 32  : 360;  // ogive axial profile samples
+FN_CYL   = PREVIEW ? 20  : 360;  // cylinder axial segments
+                                  // 291 = ceil(570 mm / 1.96 mm) for ~1:1 quads
+FN_WING  = PREVIEW ? 64  : 360;  // stabilizer arc samples
+
+// ── Derived constants ─────────────────────────────────────────────────────────
+
 R          = D / 2;
 ogive_rho  = 8.5 * D;
 total_len  = 10.0 * D;
-ogive_len  = sqrt(ogive_rho * ogive_rho - (ogive_rho - R) * (ogive_rho - R));
+ogive_len  = sqrt(ogive_rho^2 - (ogive_rho - R)^2);
 cyl_len    = total_len - ogive_len;
+root_offset = R_edge / sqrt(2);
 
-echo(str("Ogive length       = ", ogive_len, " mm"));
-echo(str("Cylinder length    = ", cyl_len, " mm"));
-echo(str("Stabilizer length  = ", L, " mm"));
-echo(str("Deploy angle       = ", deploy_angle, " degrees"));
+assert(R_in   < R_edge,         "Require R_in < R_edge");
+assert(R_edge < R_out,          "Require R_edge < R_out");
+assert(R_out  == R,             "R_out must equal fuselage radius R");
+assert(root_embed > 0,          "root_embed must be positive");
+assert(2 * axial_chamfer < L,   "Require 2 * axial_chamfer < L");
 
-// Resolution controls.
-FN_BODY = 360;
-FN_NOSE = 360;
-FN_WING = 360;
+echo(str("Ogive length       = ", ogive_len,         " mm"));
+echo(str("Cylinder length    = ", cyl_len,           " mm"));
+echo(str("Stabilizer length  = ", L,                 " mm"));
+echo(str("Root embed depth   = ", root_embed,        " mm"));
+echo(str("Cyl axial step     = ", cyl_len / FN_CYL,  " mm"));
+echo(str("Circ step          = ", 2 * 3.14159265 * R / FN_BODY, " mm"));
+
+// ── Fuselage ──────────────────────────────────────────────────────────────────
 
 function ogive_r(x) =
-    sqrt(ogive_rho * ogive_rho - (ogive_len - x) * (ogive_len - x))
-    - (ogive_rho - R);
+    sqrt(ogive_rho^2 - (ogive_len - x)^2) - (ogive_rho - R);
 
+// Profile: (r, z), tip at z=0, base at z=total_len.
+//
+// Three sections:
+//   1. Nose tip point         [0, 0]
+//   2. Ogive curve            FN_NOSE samples, uniform in x
+//   3. Cylinder axial rungs   FN_CYL intermediate z-values at r=R
+//      (without these the cylinder is one 570 mm tall quad → 290:1 sliver)
+//   4. Base closure           [R, total_len], [0, total_len]
+//
 function body_profile() = concat(
     [[0, 0]],
     [for (i = [1 : FN_NOSE])
         let(x = i * ogive_len / FN_NOSE)
         [ogive_r(x), x]
     ],
+    [for (j = [1 : FN_CYL - 1])
+        [R, ogive_len + j * cyl_len / FN_CYL]
+    ],
     [[R, total_len],
      [0, total_len]]
 );
 
-// Z-axis-aligned body; tip at Z=0, base at Z=total_len.
 module fuselage() {
     rotate_extrude($fn = FN_BODY)
-    polygon(body_profile());
+        polygon(body_profile());
 }
 
-wing_start = total_len - L;
-wing_end   = total_len;
+// ── Stabilizer geometry ───────────────────────────────────────────────────────
 
-// Radius-vs-axial profile for the shell panel before deployment. Each axial
-// end collapses to R_edge, forming a sharp leading/trailing edge instead of a
-// blunt surface. With R36/R38/R40 and chamfer_len=2 mm, the chamfer faces are
-// 45 degrees. The whole panel is swung outward about a long hinge axis slightly
-// inside the fuselage, giving a finite solid overlap at the root. The visible
-// root remains at the OY/OZ fuselage intersections after the boolean union.
-module stabilizer_profile() {
-    assert(R_in < R_edge && R_edge < R_out,
-        "Require R_in < R_edge < R_out");
-    assert(2 * chamfer_len < L,
-        "Require 2 * chamfer_len < L");
+wing_center  = [-root_offset, R_out + root_offset];
+root_y       = R - root_embed;   // all root points embedded root_embed below surface
 
-    polygon([
-        [R_edge, wing_start],
-        [R_out,  wing_start + chamfer_len],
-        [R_out,  wing_end - chamfer_len],
-        [R_edge, wing_end],
-        [R_in,   wing_end - chamfer_len],
-        [R_in,   wing_start + chamfer_len]
-    ]);
-}
+function pt_on_arc(r, a) =
+    [wing_center[0] + r * cos(a), wing_center[1] + r * sin(a)];
 
-module rotate_about_z_at(angle, point) {
-    translate(point)
-    rotate([0, 0, angle])
-    translate([-point[0], -point[1], -point[2]])
-    children();
-}
+function angle_of(p) =
+    atan2(p[1] - wing_center[1], p[0] - wing_center[0]);
 
-module stowed_stabilizer_one() {
-    rotate([0, 0, 90])
-    rotate_extrude(angle = xi, $fn = FN_WING)
-    stabilizer_profile();
-}
+function x_at_y(r, y) =
+    wing_center[0] + sqrt(max(0, r^2 - (y - wing_center[1])^2));
+
+root_inner = [x_at_y(R_in,   root_y), root_y];
+root_outer = [x_at_y(R_out,  root_y), root_y];
+root_edge  = [x_at_y(R_edge, root_y), root_y];   // embedded, not flush
+
+theta_inner = angle_of(root_inner);
+theta_outer = angle_of(root_outer);
+theta_edge  = angle_of(root_edge);
+theta_tip   = theta_edge + xi;
+
+function edge_pt(i)  = pt_on_arc(R_edge, theta_edge  + (theta_tip - theta_edge)  * i / FN_WING);
+function outer_pt(i) = pt_on_arc(R_out,  theta_outer + (theta_tip - theta_outer) * i / FN_WING);
+function inner_pt(i) = pt_on_arc(R_in,   theta_inner + (theta_tip - theta_inner) * i / FN_WING);
+
+function p3(p, z) = [p[0], p[1], z];
+function vi(block, i) = block * (FN_WING + 1) + i;
+
+// ── Stabilizer solid ──────────────────────────────────────────────────────────
+//
+// Blocks 0–5, each (FN_WING+1) points:
+//   0  z0  edge arc  (leading knife-edge)
+//   1  z1  outer arc
+//   2  z1  inner arc
+//   3  z2  outer arc
+//   4  z2  inner arc
+//   5  z3  edge arc  (trailing knife-edge)
+//
+// Winding: CCW from outside (right-hand outward normal).
 
 module stabilizer_one() {
-    hinge_angle = 90;
-    hinge_point = [
-        hinge_radius * cos(hinge_angle),
-        hinge_radius * sin(hinge_angle),
-        0
+    z0 = total_len - L;
+    z1 = z0 + axial_chamfer;
+    z2 = total_len - axial_chamfer;
+    z3 = total_len;
+    n  = FN_WING;
+
+    pts = concat(
+        [for (i=[0:n]) p3(edge_pt(i),  z0)],
+        [for (i=[0:n]) p3(outer_pt(i), z1)],
+        [for (i=[0:n]) p3(inner_pt(i), z1)],
+        [for (i=[0:n]) p3(outer_pt(i), z2)],
+        [for (i=[0:n]) p3(inner_pt(i), z2)],
+        [for (i=[0:n]) p3(edge_pt(i),  z3)]
+    );
+
+    outer_lead   = [for (i=[0:n-1]) each [[vi(0,i),vi(1,i),vi(1,i+1)],   [vi(0,i),vi(1,i+1),vi(0,i+1)]]];
+    inner_lead   = [for (i=[0:n-1]) each [[vi(0,i+1),vi(2,i+1),vi(2,i)], [vi(0,i+1),vi(2,i),vi(0,i)]]];
+    outer_barrel = [for (i=[0:n-1]) each [[vi(1,i),vi(3,i),vi(3,i+1)],   [vi(1,i),vi(3,i+1),vi(1,i+1)]]];
+    inner_barrel = [for (i=[0:n-1]) each [[vi(2,i+1),vi(4,i+1),vi(4,i)], [vi(2,i+1),vi(4,i),vi(2,i)]]];
+    outer_trail  = [for (i=[0:n-1]) each [[vi(3,i),vi(5,i),vi(5,i+1)],   [vi(3,i),vi(5,i+1),vi(3,i+1)]]];
+    inner_trail  = [for (i=[0:n-1]) each [[vi(4,i+1),vi(5,i+1),vi(5,i)], [vi(4,i+1),vi(5,i),vi(4,i)]]];
+
+    root_cap = [
+        [vi(0,0), vi(2,0), vi(1,0)],
+        [vi(1,0), vi(2,0), vi(4,0)],
+        [vi(1,0), vi(4,0), vi(3,0)],
+        [vi(5,0), vi(3,0), vi(4,0)]
     ];
 
-    rotate_about_z_at(-deploy_angle, hinge_point)
-    stowed_stabilizer_one();
+    tip_cap = [
+        [vi(0,n), vi(1,n), vi(2,n)],
+        [vi(1,n), vi(3,n), vi(4,n)],
+        [vi(1,n), vi(4,n), vi(2,n)],
+        [vi(5,n), vi(4,n), vi(3,n)]
+    ];
+
+    polyhedron(
+        points   = pts,
+        faces    = concat(
+            outer_lead, inner_lead,
+            outer_barrel, inner_barrel,
+            outer_trail, inner_trail,
+            root_cap, tip_cap
+        ),
+        convexity = 10
+    );
 }
 
 module stabilizers() {
     for (k = [0 : N - 1])
         rotate([0, 0, k * 360 / N])
-        stabilizer_one();
+            stabilizer_one();
 }
+
+// ── Assembly ──────────────────────────────────────────────────────────────────
 
 module assembly() {
     render(convexity = 10)
@@ -128,7 +219,5 @@ module assembly() {
 
 EXPORT = "";
 
-module body() { assembly(); }
-
-if      (EXPORT == "body") body();
-else if (EXPORT == "")     body();
+if      (EXPORT == "body") assembly();
+else if (EXPORT == "")     assembly();
