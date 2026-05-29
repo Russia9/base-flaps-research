@@ -9,7 +9,7 @@ set -euo pipefail
 # Geometry parameters are read from constant/caseProperties.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-CASE_ARG=openfoam/test
+CASE_ARG=openfoam/cases/test
 NP=${NP:-6}
 MAX_CELLS=${MAX_CELLS:-2000000}
 

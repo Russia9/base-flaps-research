@@ -1,13 +1,14 @@
 FoamFile { version 2.0; format ascii; class volScalarField; object omega; }
+#include "../constant/freestreamProperties"
 
 dimensions      [0 0 -1 0 0 0 0];
 
-internalField   uniform 11401;
+internalField   uniform $omegaInf;
 
 boundaryField
 {
-    inlet       { type fixedValue; value uniform 11401; }
+    inlet       { type fixedValue; value uniform $omegaInf; }
     outlet      { type zeroGradient; }
-    farfield    { type freestream; freestreamValue uniform 11401; }
-    body        { type omegaWallFunction; value uniform 11401; }
+    farfield    { type freestream; freestreamValue uniform $omegaInf; }
+    body        { type omegaWallFunction; value uniform $omegaInf; }
 }

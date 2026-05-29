@@ -34,7 +34,7 @@ mixture
     }
     thermodynamics
     {
-        Tlow 200;
+        Tlow 50;
         Thigh 6000;
         Tcommon 1000;
         highCpCoeffs (3.5 0 0 0 0 -1047 3.7);

@@ -103,9 +103,27 @@ def update_freestream(case: Path, mach: float, gamma: float) -> float:
     text = path.read_text()
     t_inf = parse_scalar(text, "TInf")
     r_gas = parse_scalar(text, "RGas")
+    p_inf = parse_scalar(text, "pInf")
+    intensity = parse_scalar(text, "I")
+    mu_ratio = parse_scalar(text, "muRatio")
     u_mag = mach * math.sqrt(gamma * r_gas * t_inf)
+
+    # Freestream turbulence held at constant intensity and eddy-viscosity ratio
+    # across the sweep, so k and omega scale with Mach. Sutherland viscosity is
+    # read from thermophysicalProperties to keep a single source of truth.
+    thermo = (case / "constant" / "thermophysicalProperties").read_text()
+    a_s = parse_scalar(thermo, "As")
+    t_s = parse_scalar(thermo, "Ts")
+    mu_inf = a_s * t_inf**1.5 / (t_inf + t_s)
+    rho_inf = p_inf / (r_gas * t_inf)
+    nu_inf = mu_inf / rho_inf
+    k_inf = 1.5 * (intensity * u_mag) ** 2
+    omega_inf = k_inf / (mu_ratio * nu_inf)
+
     text = replace_scalar(text, "UInfMag", u_mag)
     text = replace_vector(text, "UInf", (u_mag, 0.0, 0.0))
+    text = replace_scalar(text, "kInf", k_inf)
+    text = replace_scalar(text, "omegaInf", omega_inf)
     path.write_text(text)
     return u_mag
 

@@ -14,7 +14,7 @@
 
 D             = 80.0;   // fuselage outer diameter, mm
 N             = 4;      // number of stabilizers
-xi            = 180;     // stabilizer arc span, degrees
+xi            = 90;     // stabilizer arc span, degrees
 L             = 140.0;  // axial stabilizer chord length, mm
 
 R_in          = 36.0;   // inner arc radius of full-thickness section
