@@ -14,6 +14,21 @@ forces
     rhoInf          $rhoInf;
 }
 
+// DEBUG: locate the cell where the mean flow detonates. Prints the min/max of
+// each field and the coordinates where they occur to the log every time step.
+// Remove (with the frequent writes in controlDict) before the production sweep.
+minMaxValues
+{
+    type            fieldMinMax;
+    libs            (fieldFunctionObjects);
+    mode            magnitude;
+    fields          (p T rho U);
+    location        yes;
+    writeControl    timeStep;
+    writeInterval   1;
+    log             yes;
+}
+
 MachNo
 {
     type            MachNo;

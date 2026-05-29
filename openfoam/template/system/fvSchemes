@@ -24,12 +24,6 @@ ddtSchemes
 gradSchemes
 {
     default         Gauss linear;
-
-    // Limit the velocity/turbulence gradients: unlimited grad(U) overshoots
-    // at the bow/fin shocks and detonates the kOmegaSST production term.
-    grad(U)         cellLimited Gauss linear 1;
-    grad(k)         cellLimited Gauss linear 1;
-    grad(omega)     cellLimited Gauss linear 1;
 }
 
 divSchemes
@@ -43,9 +37,7 @@ divSchemes
 
 laplacianSchemes
 {
-    // limited 0.5 instead of fully corrected: max mesh non-orthogonality is
-    // ~63 deg, where the explicit non-orthogonal correction can over-shoot.
-    default         Gauss linear limited 0.5;
+    default         Gauss linear corrected;
 }
 
 interpolationSchemes
@@ -59,7 +51,7 @@ interpolationSchemes
 
 snGradSchemes
 {
-    default         limited 0.5;
+    default         corrected;
 }
 
 wallDist

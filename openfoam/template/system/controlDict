@@ -26,11 +26,15 @@ endTime         0.2;
 
 deltaT          1e-08;
 
-writeControl    runTime;
+// DEBUG: the run dies at t~1.6e-5 s, long before the production 0.02 s
+// interval, so nothing was ever written. Capture the field approaching the
+// blowup; purgeWrite caps disk use. RESTORE to runTime / 0.02 / 0 before the
+// production sweep, or every case will write hundreds of thousands of times.
+writeControl    adjustableRunTime;
 
-writeInterval   0.02;
+writeInterval   1e-06;
 
-purgeWrite      0;
+purgeWrite      20;
 
 writeFormat     binary;
 
