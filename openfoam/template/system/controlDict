@@ -14,31 +14,31 @@ FoamFile
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-application     rhoCentralFoam;
+application     hisa;
 
+// HiSA is a steady-state pseudo-transient solver: "time" is the outer
+// (pseudo-time) iteration counter, not physical seconds. endTime is the
+// iteration budget; deltaT is fixed at 1. Local time-stepping and the
+// pseudo-CFL ramp live in fvSolution, so adjustTimeStep/maxCo are gone.
 startFrom       startTime;
 
 startTime       0;
 
 stopAt          endTime;
 
-endTime         0.2;
+endTime         5000;
 
-deltaT          1e-08;
+deltaT          1;
 
-// DEBUG: the run dies at t~1.6e-5 s, long before the production 0.02 s
-// interval, so nothing was ever written. Capture the field approaching the
-// blowup; purgeWrite caps disk use. RESTORE to runTime / 0.02 / 0 before the
-// production sweep, or every case will write hundreds of thousands of times.
-writeControl    adjustableRunTime;
+writeControl    timeStep;
 
-writeInterval   1e-06;
+writeInterval   100;
 
-purgeWrite      20;
+purgeWrite      2;
 
 writeFormat     binary;
 
-writePrecision  6;
+writePrecision  8;
 
 writeCompression off;
 
@@ -46,13 +46,9 @@ timeFormat      general;
 
 timePrecision   6;
 
+graphFormat     raw;
+
 runTimeModifiable true;
-
-adjustTimeStep  yes;
-
-maxCo           0.3;
-
-maxDeltaT       1e-05;
 
 #include "../constant/freestreamProperties"
 

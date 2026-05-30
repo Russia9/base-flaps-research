@@ -21,10 +21,19 @@ internalField   uniform $TInf;
 
 boundaryField
 {
-    inlet       { type fixedValue; value uniform $TInf; }
-    outlet      { type zeroGradient; }
-    farfield    { type freestream; freestreamValue uniform $TInf; }
-    body        { type zeroGradient; }
+    "(inlet|outlet|farfield)"
+    {
+        type            characteristicFarfieldTemperature;
+        U               $UInf;
+        p               $pInf;
+        T               $TInf;
+        value           $internalField;
+    }
+    body
+    {
+        type            characteristicWallTemperature;
+        value           $internalField;
+    }
 }
 
 

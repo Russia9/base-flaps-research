@@ -21,10 +21,22 @@ internalField   uniform $UInf;
 
 boundaryField
 {
-    inlet       { type fixedValue; value uniform $UInf; }
-    outlet      { type zeroGradient; }
-    farfield    { type freestream; freestreamValue uniform $UInf; }
-    body        { type noSlip; }
+    // Characteristic far-field: self-adapts to in/outflow, so the same BC
+    // serves the upstream (inlet), downstream (outlet) and side (farfield)
+    // outer patches. U/p/T give the freestream reference state.
+    "(inlet|outlet|farfield)"
+    {
+        type            characteristicFarfieldVelocity;
+        U               $UInf;
+        p               $pInf;
+        T               $TInf;
+        value           $internalField;
+    }
+    body
+    {
+        type            boundaryCorrectedFixedValue;
+        value           uniform (0 0 0);
+    }
 }
 
 

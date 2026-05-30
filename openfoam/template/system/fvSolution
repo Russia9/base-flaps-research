@@ -16,35 +16,69 @@ FoamFile
 
 solvers
 {
-    "(rho|rhoU|rhoE)"
-    {
-        solver          diagonal;
-    }
-
-    U
-    {
-        solver          smoothSolver;
-        smoother        GaussSeidel;
-        nSweeps         2;
-        tolerance       1e-09;
-        relTol          0.01;
-    }
-
-    e
-    {
-        $U;
-        tolerance       1e-10;
-        relTol          0.1;
-    }
-
+    // Segregated turbulence transport.
     "(k|omega)"
     {
         solver          smoothSolver;
-        smoother        GaussSeidel;
-        nSweeps         2;
-        tolerance       1e-08;
+        smoother        symGaussSeidel;
+        tolerance       1e-10;
         relTol          0.1;
+        minIter         1;
     }
+
+    // Poisson wall-distance field (wallDist method Poisson in fvSchemes).
+    yPsi
+    {
+        solver          GAMG;
+        smoother        GaussSeidel;
+        cacheAgglomeration true;
+        nCellsInCoarsestLevel 10;
+        agglomerator    faceAreaPair;
+        mergeLevels     1;
+        tolerance       1e-6;
+        relTol          0;
+    }
+}
+
+relaxationFactors
+{
+    equations
+    {
+        k       0.5;
+        omega   0.5;
+    }
+}
+
+// Coupled density-based mean-flow solve (rho, rhoU, rhoE together).
+flowSolver
+{
+    solver            GMRES;
+    GMRES
+    {
+        inviscidJacobian  LaxFriedrichs;
+        viscousJacobian   laplacian;
+        preconditioner    LUSGS;
+
+        maxIter           20;
+        nKrylov           8;
+        solverTolRel      1e-1 (1e-1 1e-1 1e-1) 1e-1;
+    }
+}
+
+// Pseudo-time (local time-stepping) ramp. Start gentle and let the CFL grow
+// as the residual falls; this is the robustness lever, replacing maxCo.
+pseudoTime
+{
+    pseudoTol         1e-6 (1e-6 1e-6 1e-6) 1e-6;
+    pseudoCoNum       1;
+    pseudoCoNumMax    20.0;
+
+    pseudoCoNumMaxIncreaseFactor 1.25;
+    pseudoCoNumMin               0.1;
+
+    localTimestepping            true;
+    localTimesteppingBounding    true;
+    localTimesteppingLowerBound  0.95;
 }
 
 

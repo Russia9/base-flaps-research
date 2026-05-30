@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run rhoCentralFoam on a decomposed case, reconstruct the final time step, and
+# Run hisa on a decomposed case, reconstruct the final time step, and
 # emit coefficient CSV output.
 #
 # Usage:
 #   ./run-simulation.sh [--dry-run] [case-dir]
+#
+# --dry-run validates the decomposed mesh in parallel (checkMesh); hisa itself
+# has no -dry-run option.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CASE_ARG=openfoam/test
@@ -77,7 +80,7 @@ esac
     exit 2
 }
 
-for exe in mpirun rhoCentralFoam foamListTimes reconstructPar; do
+for exe in mpirun hisa checkMesh foamListTimes reconstructPar; do
     need_command "$exe"
 done
 
@@ -113,25 +116,19 @@ pushd "$CASE" >/dev/null
 # Clean prior run outputs while preserving the final mesh and initial fields.
 foamListTimes -rm -processor >/dev/null 2>&1 || true
 foamListTimes -rm            >/dev/null 2>&1 || true
-rm -rf postProcessing log.rhoCentralFoam log.rhoCentralFoam.dryRun log.reconstructPar
+rm -rf postProcessing log.hisa log.checkMesh.dryRun log.reconstructPar
 
 if [ "$DRY_RUN" -eq 1 ]; then
-    if ! mpirun -np "$NP" rhoCentralFoam -parallel -dry-run 2>&1 | tee log.rhoCentralFoam.dryRun; then
-        if ! grep -q "MPI_ERR_TRUNCATE" log.rhoCentralFoam.dryRun; then
-            exit 1
-        fi
-        {
-            echo
-            echo "warning: parallel rhoCentralFoam -dry-run hit MPI_ERR_TRUNCATE; retrying serial dry-run on reconstructed mesh"
-        } | tee -a log.rhoCentralFoam.dryRun
-        rhoCentralFoam -dry-run 2>&1 | tee -a log.rhoCentralFoam.dryRun
-    fi
+    # hisa has no -dry-run; validate the decomposed mesh/patches instead, which
+    # is the usual startup failure mode. checkMesh exits non-zero on a failed
+    # check, which (set -e) aborts the dry-run as intended.
+    mpirun -np "$NP" checkMesh -parallel 2>&1 | tee log.checkMesh.dryRun
     popd >/dev/null
-    echo "dry-run OK : $CASE"
+    echo "dry-run OK : $CASE (mesh/decomposition checked)"
     exit 0
 fi
 
-mpirun -np "$NP" rhoCentralFoam -parallel 2>&1 | tee log.rhoCentralFoam
+mpirun -np "$NP" hisa -parallel 2>&1 | tee log.hisa
 reconstructPar -latestTime 2>&1 | tee log.reconstructPar
 : > case.foam
 
