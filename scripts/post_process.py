@@ -46,37 +46,28 @@ def parse_freestream(case: Path) -> dict[str, float]:
             "rhoInf": rho, "qInf": q}
 
 
-VEC_RE = re.compile(r"\(\s*([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s*\)")
-
-
 def parse_force_file(path: Path) -> list[dict[str, float]]:
-    """Parse OpenFOAM force.dat / moment.dat.
+    """Parse OpenFOAM v2512 force.dat / moment.dat.
 
-    Format: each non-comment line is
-        <time> (px py pz) (vx vy vz) (porx pory porz)
+    Each non-comment line is whitespace-separated columns (no parentheses):
+        <time>  total(x y z)  pressure(x y z)  viscous(x y z)  [porous(x y z)]
+    where total = pressure + viscous (+ porous). We keep the reported total
+    and the pressure/viscous split; the template never enables porosity.
     """
     rows: list[dict[str, float]] = []
     for raw in path.read_text().splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        # Time is the first token; the rest are 3 parenthesized vectors.
-        time_str, _, rest = line.partition(" ")
-        time = float(time_str)
-        vecs = VEC_RE.findall(rest)
-        if len(vecs) < 2:
+        nums = [float(tok) for tok in line.split()]
+        # time + at least total/pressure/viscous triplets.
+        if len(nums) < 10:
             raise ValueError(f"Unexpected line in {path}: {raw!r}")
-        p = tuple(float(x) for x in vecs[0])
-        v = tuple(float(x) for x in vecs[1])
-        por = tuple(float(x) for x in vecs[2]) if len(vecs) >= 3 else (0.0, 0.0, 0.0)
         rows.append({
-            "time": time,
-            "px": p[0], "py": p[1], "pz": p[2],
-            "vx": v[0], "vy": v[1], "vz": v[2],
-            "porx": por[0], "pory": por[1], "porz": por[2],
-            "x": p[0] + v[0] + por[0],
-            "y": p[1] + v[1] + por[1],
-            "z": p[2] + v[2] + por[2],
+            "time": nums[0],
+            "x": nums[1], "y": nums[2], "z": nums[3],
+            "px": nums[4], "py": nums[5], "pz": nums[6],
+            "vx": nums[7], "vy": nums[8], "vz": nums[9],
         })
     return rows
 

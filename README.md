@@ -76,6 +76,31 @@ All coefficients use **D** as the reference length and **πD²/4** as the refere
 
 All six are written per time step by `scripts/post_process.py` to `results/<case>/coefficients.csv`, along with split pressure/viscous components. For symmetric configurations (N = 2, 4 at 0° AoA) the off-axial components vanish by symmetry; non-zero values are expected for N = 1 and N = 3.
 
+### Extracting coefficients from a solved case
+
+`run-simulation.sh` runs the post-processor automatically after `reconstructPar`. To (re-)generate the CSV from an already-solved case without rerunning the solver:
+
+```bash
+python3 scripts/post_process.py openfoam/test
+```
+
+The script reads:
+
+- `<case>/constant/freestreamProperties` — `pInf`, `TInf`, `UInfMag`, `RGas`, from which it derives `rhoInf` and the dynamic pressure `q∞`.
+- the newest `<case>/postProcessing/forces/<time>/force.dat` and `moment.dat` pair. OpenFOAM v2512 writes these as whitespace-separated columns `total | pressure | viscous` (each an `x y z` triple, no parentheses); HiSA integrates against the live `rho` field, so the values are true N / N·m and the script applies the `q∞` normalization.
+
+It writes `results/<case-name>/coefficients.csv`, one row per solver time step:
+
+| Columns | Meaning |
+|---|---|
+| `time` | solver iteration |
+| `Cx, Cy, Cz` | total force coefficients |
+| `Mx, My, Mz` | total moment coefficients |
+| `Cx_p … Cz_p`, `Mx_p … Mz_p` | pressure contribution |
+| `Cx_v … Cz_v`, `Mx_v … Mz_v` | viscous contribution |
+
+It also prints a convergence summary (mean over the last 10% of samples). Use that mean only once `Cx` has plateaued — the early iterations are start-up transients.
+
 ## Toolchain
 
 | Component | Tool |
