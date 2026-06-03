@@ -20,7 +20,9 @@ application     hisa;
 // (pseudo-time) iteration counter, not physical seconds. endTime is the
 // iteration budget; deltaT is fixed at 1. Local time-stepping and the
 // pseudo-CFL ramp live in fvSolution, so adjustTimeStep/maxCo are gone.
-startFrom       startTime;
+// latestTime makes interrupted runs resumable: a fresh case resolves to 0,
+// while a restart continues from the newest written iteration.
+startFrom       latestTime;
 
 startTime       0;
 
@@ -34,7 +36,7 @@ writeControl    timeStep;
 
 writeInterval   100;
 
-purgeWrite      2;
+purgeWrite      0;
 
 writeFormat     binary;
 
