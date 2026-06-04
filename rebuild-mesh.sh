@@ -157,7 +157,21 @@ openscad \
 pushd "$CASE" >/dev/null
 
 foamDictionary system/decomposeParDict -entry numberOfSubdomains -set "$NP" >/dev/null
-surfaceClean constant/triSurface/body.stl 5e-05 1e-4 constant/triSurface/body.stl
+
+# surfaceClean repairs non-watertight STLs: model.scad emits a non-closed surface
+# with duplicate-vertex "illegal" triangles that it strips. But on an already-clean
+# closed surface its collapseBase pass mangles benign sub-micron CGAL union slivers
+# (and aborts on the long cylinder slivers arc_stabilizers.scad produces). So only
+# clean when surfaceCheck reports the STL is not already watertight.
+surfaceCheck constant/triSurface/body.stl 2>&1 | tee log.surfaceCheck >/dev/null || true
+if grep -q "Surface has no illegal triangles" log.surfaceCheck \
+   && grep -q "Surface is closed" log.surfaceCheck; then
+    echo "surfaceClean: skipped (body.stl already closed with no illegal triangles)"
+else
+    echo "surfaceClean: repairing body.stl"
+    surfaceClean constant/triSurface/body.stl 5e-05 1e-4 constant/triSurface/body.stl
+fi
+
 surfaceFeatureExtract
 blockMesh
 decomposePar -force
