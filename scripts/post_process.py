@@ -10,7 +10,8 @@ Reads:
     newest valid <case>/postProcessing/forces/<time>/moment.dat
 
 Writes:
-    results/<case-name>/coefficients.csv
+    results/<case-name>/coefficients.csv   (normalized by q_inf*S and q_inf*S*D)
+    results/<case-name>/forces.csv          (raw force/moment, N and N*m)
 
 Coefficients use D = 0.08 m as reference length and S = pi*D^2/4 as
 reference area; moments are referenced to the nose tip (origin).
@@ -133,6 +134,28 @@ def main(argv: list[str]) -> int:
             ]
             fh.write(",".join(f"{v:.8e}" for v in row) + "\n")
 
+    # Raw dimensional forces/moments, straight from force.dat/moment.dat
+    # (total plus pressure/viscous split), N and N*m. Same layout as the
+    # coefficient CSV, just undivided.
+    out_forces = out_dir / "forces.csv"
+    force_cols = ["time",
+                  "Fx", "Fy", "Fz", "Mx", "My", "Mz",
+                  "Fx_p", "Fy_p", "Fz_p", "Fx_v", "Fy_v", "Fz_v",
+                  "Mx_p", "My_p", "Mz_p", "Mx_v", "My_v", "Mz_v"]
+    with out_forces.open("w") as fh:
+        fh.write(",".join(force_cols) + "\n")
+        for f, m in zip(forces, moments):
+            row = [
+                f["time"],
+                f["x"], f["y"], f["z"],
+                m["x"], m["y"], m["z"],
+                f["px"], f["py"], f["pz"],
+                f["vx"], f["vy"], f["vz"],
+                m["px"], m["py"], m["pz"],
+                m["vx"], m["vy"], m["vz"],
+            ]
+            fh.write(",".join(f"{v:.8e}" for v in row) + "\n")
+
     # Mean over the last 10% of samples for a quick eyeball.
     n = len(forces)
     tail = max(1, n // 10)
@@ -150,6 +173,7 @@ def main(argv: list[str]) -> int:
     print(f"Mx, My, Mz    : {mean(moments, 'x', q_s_d):+.4f}, "
           f"{mean(moments, 'y', q_s_d):+.4f}, {mean(moments, 'z', q_s_d):+.4f}")
     print(f"output        : {out}")
+    print(f"                {out_forces}")
     return 0
 
 
