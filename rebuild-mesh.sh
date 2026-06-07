@@ -107,7 +107,7 @@ case "$MAX_CELLS" in
     ''|*[!0-9]*) usage_error "MAX_CELLS must be a non-negative integer" ;;
 esac
 
-for exe in openscad surfaceClean surfaceFeatureExtract blockMesh decomposePar foamDictionary mpirun snappyHexMesh reconstructParMesh checkMesh; do
+for exe in openscad-nightly surfaceClean surfaceFeatureExtract blockMesh decomposePar foamDictionary mpirun snappyHexMesh reconstructParMesh checkMesh; do
     need_command "$exe"
 done
 
@@ -149,7 +149,7 @@ for time_dir in "$CASE"/[1-9]* "$CASE"/0.*; do
 done
 
 mkdir -p "$CASE/constant/triSurface"
-openscad \
+openscad-nightly \
     -o "$CASE/constant/triSurface/body.stl" \
     -D "D=$D; N=$N; xi=$XI; LD=$LD; TD=$TD;" \
     "$GEOMETRY"
