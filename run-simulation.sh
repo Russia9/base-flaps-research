@@ -11,39 +11,18 @@ set -euo pipefail
 # has no -dry-run option.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+# ── configuration (env overridable) ──────────────────────────────────────────
 CASE_ARG=openfoam/test
 DRY_RUN=0
-NP=${NP:-6}
+NP=${NP:-12}
+DEPENDENCIES="mpirun hisa checkMesh foamListTimes reconstructPar"
+FIELDS="U p T k omega nut alphat"
 
+# ── helpers ───────────────────────────────────────────────────────────────────
 usage() {
     sed -n '1,10p' "$0" >&2
 }
-
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        --dry-run)
-            DRY_RUN=1
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        -*)
-            echo "error: unknown option: $1" >&2
-            usage
-            exit 2
-            ;;
-        *)
-            CASE_ARG=$1
-            ;;
-    esac
-    shift
-done
-
-case "$CASE_ARG" in
-    /*) CASE=$CASE_ARG ;;
-    *)  CASE="$ROOT/$CASE_ARG" ;;
-esac
 
 need_command() {
     command -v "$1" >/dev/null 2>&1 || {
@@ -69,69 +48,128 @@ processor_count() {
     printf '%s\n' "$count"
 }
 
-case "$NP" in
-    ''|*[!0-9]*)
+require_body_patch() {
+    grep -q "body" "$1" || {
+        echo "error: $1 is missing the body patch" >&2
+        exit 1
+    }
+}
+
+# ── pipeline stages ───────────────────────────────────────────────────────────
+parse_args() {
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --dry-run)
+                DRY_RUN=1
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -*)
+                echo "error: unknown option: $1" >&2
+                usage
+                exit 2
+                ;;
+            *)
+                CASE_ARG=$1
+                ;;
+        esac
+        shift
+    done
+}
+
+resolve_paths() {
+    case "$CASE_ARG" in
+        /*) CASE=$CASE_ARG ;;
+        *)  CASE="$ROOT/$CASE_ARG" ;;
+    esac
+}
+
+validate_config() {
+    local exe
+
+    case "$NP" in
+        ''|*[!0-9]*)
+            echo "error: NP must be a positive integer" >&2
+            exit 2
+            ;;
+    esac
+    [ "$NP" -gt 0 ] || {
         echo "error: NP must be a positive integer" >&2
         exit 2
-        ;;
-esac
-[ "$NP" -gt 0 ] || {
-    echo "error: NP must be a positive integer" >&2
-    exit 2
+    }
+
+    for exe in $DEPENDENCIES; do
+        need_command "$exe"
+    done
 }
 
-for exe in mpirun hisa checkMesh foamListTimes reconstructPar; do
-    need_command "$exe"
-done
+preflight() {
+    local proc_count field
 
-[ -d "$CASE/processor0" ] || {
-    echo "error: $CASE is not decomposed; run ./rebuild-mesh.sh $CASE_ARG first" >&2
-    exit 1
+    [ -d "$CASE/processor0" ] || {
+        echo "error: $CASE is not decomposed; run ./rebuild-mesh.sh $CASE_ARG first" >&2
+        exit 1
+    }
+
+    proc_count=$(processor_count)
+    [ "$proc_count" -eq "$NP" ] || {
+        echo "error: $CASE has $proc_count processor directories but NP=$NP; rerun ./rebuild-mesh.sh with the same NP" >&2
+        exit 1
+    }
+
+    require_file "$CASE/constant/polyMesh/boundary"
+    require_file "$CASE/processor0/constant/polyMesh/boundary"
+    require_body_patch "$CASE/constant/polyMesh/boundary"
+    require_body_patch "$CASE/processor0/constant/polyMesh/boundary"
+
+    for field in $FIELDS; do
+        require_file "$CASE/processor0/0/$field"
+    done
 }
 
-PROC_COUNT=$(processor_count)
-[ "$PROC_COUNT" -eq "$NP" ] || {
-    echo "error: $CASE has $PROC_COUNT processor directories but NP=$NP; rerun ./rebuild-mesh.sh with the same NP" >&2
-    exit 1
+clean_outputs() {
+    # Clean prior run outputs while preserving the final mesh and initial fields.
+    foamListTimes -rm -processor >/dev/null 2>&1 || true
+    foamListTimes -rm            >/dev/null 2>&1 || true
+    rm -rf postProcessing log.hisa log.checkMesh.dryRun log.reconstructPar
 }
 
-require_file "$CASE/constant/polyMesh/boundary"
-require_file "$CASE/processor0/constant/polyMesh/boundary"
-
-grep -q "body" "$CASE/constant/polyMesh/boundary" || {
-    echo "error: $CASE/constant/polyMesh/boundary is missing the body patch" >&2
-    exit 1
-}
-grep -q "body" "$CASE/processor0/constant/polyMesh/boundary" || {
-    echo "error: $CASE/processor0/constant/polyMesh/boundary is missing the body patch" >&2
-    exit 1
-}
-
-for field in U p T k omega nut alphat; do
-    require_file "$CASE/processor0/0/$field"
-done
-
-pushd "$CASE" >/dev/null
-
-# Clean prior run outputs while preserving the final mesh and initial fields.
-foamListTimes -rm -processor >/dev/null 2>&1 || true
-foamListTimes -rm            >/dev/null 2>&1 || true
-rm -rf postProcessing log.hisa log.checkMesh.dryRun log.reconstructPar
-
-if [ "$DRY_RUN" -eq 1 ]; then
+run_dry_run() {
     # hisa has no -dry-run; validate the decomposed mesh/patches instead, which
     # is the usual startup failure mode. checkMesh exits non-zero on a failed
     # check, which (set -e) aborts the dry-run as intended.
     mpirun -np "$NP" checkMesh -parallel 2>&1 | tee log.checkMesh.dryRun
+}
+
+run_solver() {
+    mpirun -np "$NP" hisa -parallel 2>&1 | tee log.hisa
+    reconstructPar -latestTime 2>&1 | tee log.reconstructPar
+    : > case.foam
+}
+
+# ── orchestration ─────────────────────────────────────────────────────────────
+main() {
+    parse_args "$@"
+    resolve_paths
+    validate_config
+    preflight
+
+    pushd "$CASE" >/dev/null
+    clean_outputs
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        run_dry_run
+        popd >/dev/null
+        echo "dry-run OK : $CASE (mesh/decomposition checked)"
+        exit 0
+    fi
+
+    run_solver
     popd >/dev/null
-    echo "dry-run OK : $CASE (mesh/decomposition checked)"
-    exit 0
-fi
 
-mpirun -np "$NP" hisa -parallel 2>&1 | tee log.hisa
-reconstructPar -latestTime 2>&1 | tee log.reconstructPar
-: > case.foam
+    python3 "$ROOT/scripts/post_process.py" "$CASE"
+}
 
-popd >/dev/null
-
-python3 "$ROOT/scripts/post_process.py" "$CASE"
+main "$@"

@@ -29,7 +29,7 @@ python3 scripts/create_case.py --force --case openfoam/test --N 2 --xi 45 --LD 1
 `openfoam/template/`; `rebuild-mesh.sh` preserves case dictionaries and only
 removes generated mesh/run artifacts. The mesh runs `mpirun -np 6` by default to
 leave two cores free on an 8-core workstation; override with `NP=<n>`.
-`MAX_CELLS=2000000` is enforced after `checkMesh` by default; set `MAX_CELLS=0`
+`MAX_CELLS=11000000` is enforced after `checkMesh` by default; set `MAX_CELLS=0`
 only for exploratory runs.
 
 **Pass an explicit case path.** The bare-invocation defaults differ between
