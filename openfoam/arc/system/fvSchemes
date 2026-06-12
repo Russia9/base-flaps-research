@@ -29,7 +29,7 @@ ddtSchemes
 gradSchemes
 {
     default         leastSquares linear;
-    gradTVD         faceLeastSquares linear;
+    gradTVD         leastSquares linear;
     grad(k)         cellLimited Gauss linear 0.9;
     grad(omega)     cellLimited Gauss linear 0.9;
 }
