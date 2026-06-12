@@ -28,7 +28,7 @@ ddtSchemes
 
 gradSchemes
 {
-    default         faceLeastSquares linear;
+    default         leastSquares linear;
     gradTVD         faceLeastSquares linear;
     grad(k)         cellLimited Gauss linear 0.9;
     grad(omega)     cellLimited Gauss linear 0.9;
