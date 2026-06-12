@@ -210,7 +210,7 @@ generate_surface() {
 build_mesh() {
     blockMesh
     decomposePar -force
-    mpirun -np "$NP" snappyHexMesh -parallel -overwrite 2>&1 | tee log.snappyHexMesh
+    mpirun -np "$NP" snappyHexMesh -parallel 2>&1 | tee log.snappyHexMesh
     reconstructParMesh -constant 2>&1 | tee log.reconstructParMesh
     strip_frozen_points_zones
 

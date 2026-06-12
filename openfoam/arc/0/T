@@ -9,14 +9,32 @@ FoamFile
 {
     version     2.0;
     format      ascii;
-    class       dictionary;
-    object      decomposeParDict;
+    class       volScalarField;
+    object      T;
 }
+#include "../constant/freestreamProperties"
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-numberOfSubdomains 6;
+dimensions      [0 0 0 1 0 0 0];
 
-method          scotch;
+internalField   uniform $TInf;
+
+boundaryField
+{
+    "(inlet|outlet|farfield)"
+    {
+        type            characteristicFarfieldTemperature;
+        U               $UInf;
+        p               $pInf;
+        T               $TInf;
+        value           $internalField;
+    }
+    body
+    {
+        type            characteristicWallTemperature;
+        value           $internalField;
+    }
+}
 
 
 // ************************************************************************* //

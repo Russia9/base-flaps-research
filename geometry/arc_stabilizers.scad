@@ -186,16 +186,17 @@ module stabilizers() {
 
 // ── Assembly ──────────────────────────────────────────────────────────────────
 
-module assembly() {
+EXPORT = "";
+
+module assembly(part = "all") {
     render(convexity = 10)
     rotate([0, 90, 0])
     union() {
-        fuselage();
-        stabilizers();
+        if (part == "all" || part == "fuselage")    fuselage();
+        if (part == "all" || part == "stabilizers") stabilizers();
     }
 }
 
-EXPORT = "";
-
-if      (EXPORT == "body") assembly();
-else if (EXPORT == "")     assembly();
+if      (EXPORT == "fuselage")    assembly("fuselage");
+else if (EXPORT == "stabilizers") assembly("stabilizers");
+else                              assembly("all");

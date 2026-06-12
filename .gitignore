@@ -7,4 +7,6 @@
 openfoam/*
 !openfoam/template/
 !openfoam/template/**
+!openfoam/arc/
+!openfoam/arc/**
 openfoam/template/*.foam

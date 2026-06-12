@@ -10,13 +10,42 @@ FoamFile
     version     2.0;
     format      ascii;
     class       dictionary;
-    object      decomposeParDict;
+    object      thermophysicalProperties;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-numberOfSubdomains 6;
+thermoType
+{
+    type            hePsiThermo;
+    mixture         pureMixture;
+    transport       sutherland;
+    thermo          janaf;
+    equationOfState perfectGas;
+    specie          specie;
+    energy          sensibleInternalEnergy;
+}
 
-method          scotch;
+mixture
+{
+    // normalised gas
+    specie
+    {
+        molWeight       28.96;
+    }
+    thermodynamics
+    {
+        Tlow 50;
+        Thigh 6000;
+        Tcommon 1000;
+        highCpCoeffs (3.5 0 0 0 0 -1047 3.7);
+        lowCpCoeffs  (3.5 0 0 0 0 -1047 3.7);
+    }
+    transport
+    {
+        As 1.458e-6;
+        Ts 110.4;
+    }
+}
 
 
 // ************************************************************************* //

@@ -1,0 +1,14 @@
+FoamFile { version 2.0; format ascii; class volScalarField; object k; }
+#include "../constant/freestreamProperties"
+
+dimensions      [0 2 -2 0 0 0 0];
+
+internalField   uniform $kInf;
+
+boundaryField
+{
+    inlet       { type fixedValue; value uniform $kInf; }
+    outlet      { type zeroGradient; }
+    farfield    { type freestream; freestreamValue uniform $kInf; }
+    body        { type kqRWallFunction; value uniform $kInf; }
+}

@@ -1,0 +1,71 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2512                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      fvSchemes;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// AUSM+up is positivity-preserving through both shocks and strong
+// rarefactions, which is the whole reason for moving off rhoCentralFoam's
+// central (Kurganov) flux: it no longer overshoots into negative density in
+// the base wake.
+fluxScheme          AUSMPlusUp;
+lowMachAusm         false;
+
+ddtSchemes
+{
+    default         bounded dualTime rPseudoDeltaT steadyState;
+}
+
+gradSchemes
+{
+    default         faceLeastSquares linear;
+    gradTVD         faceLeastSquares linear;
+    grad(k)         cellLimited Gauss linear 0.9;
+    grad(omega)     cellLimited Gauss linear 0.9;
+}
+
+divSchemes
+{
+    default         none;
+    div(tauMC)      Gauss linear;
+    div(phi,k)      bounded Gauss limitedLinear 1;
+    div(phi,omega)  bounded Gauss limitedLinear 1;
+}
+
+laplacianSchemes
+{
+    default               Gauss linear corrected;
+    laplacian(muEff,U)    Gauss linear compact;
+    laplacian(alphaEff,e) Gauss linear compact;
+}
+
+interpolationSchemes
+{
+    default         linear;
+    reconstruct(rho) wVanLeer gradTVD;
+    reconstruct(U)  wVanLeer gradTVD;
+    reconstruct(T)  wVanLeer gradTVD;
+}
+
+snGradSchemes
+{
+    default         corrected;
+}
+
+wallDist
+{
+    method          Poisson;
+}
+
+
+// ************************************************************************* //

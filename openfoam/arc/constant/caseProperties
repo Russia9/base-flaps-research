@@ -10,13 +10,17 @@ FoamFile
     version     2.0;
     format      ascii;
     class       dictionary;
-    object      decomposeParDict;
+    object      caseProperties;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-numberOfSubdomains 6;
-
-method          scotch;
+D           80;   // mm
+N           4;
+xi          90;
+LD          1;
+TD          0.02;
+Mach        1.5;
+gamma       1.4;
 
 
 // ************************************************************************* //

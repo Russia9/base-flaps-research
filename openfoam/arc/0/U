@@ -9,14 +9,35 @@ FoamFile
 {
     version     2.0;
     format      ascii;
-    class       dictionary;
-    object      decomposeParDict;
+    class       volVectorField;
+    object      U;
 }
+#include "../constant/freestreamProperties"
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-numberOfSubdomains 6;
+dimensions      [0 1 -1 0 0 0 0];
 
-method          scotch;
+internalField   uniform $UInf;
+
+boundaryField
+{
+    // Characteristic far-field: self-adapts to in/outflow, so the same BC
+    // serves the upstream (inlet), downstream (outlet) and side (farfield)
+    // outer patches. U/p/T give the freestream reference state.
+    "(inlet|outlet|farfield)"
+    {
+        type            characteristicFarfieldVelocity;
+        U               $UInf;
+        p               $pInf;
+        T               $TInf;
+        value           $internalField;
+    }
+    body
+    {
+        type            boundaryCorrectedFixedValue;
+        value           uniform (0 0 0);
+    }
+}
 
 
 // ************************************************************************* //
