@@ -142,11 +142,11 @@ meshQualityControls
     maxConcave           80;
     minFlatness          0.5;
     minVol               1e-15;
-    minTetQuality        1e-9;
+    minTetQuality        1e-30;
     minArea              -1;
-    minTwist             0.05;
-    minDeterminant       0.01;
-    minFaceWeight        0.05;
+    minTwist             0.02;
+    minDeterminant       0.001;
+    minFaceWeight        0.02;
     minVolRatio          0.01;
     minTriangleTwist     -1;
     nSmoothScale         4;
