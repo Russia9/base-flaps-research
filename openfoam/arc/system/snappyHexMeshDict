@@ -2,7 +2,7 @@ FoamFile { version 2.0; format ascii; class dictionary; object snappyHexMeshDict
 
 castellatedMesh true;
 snap            true;
-addLayers       false;
+addLayers       true;
 
 geometry
 {
