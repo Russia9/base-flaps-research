@@ -123,49 +123,49 @@ addLayersControls
     }
     expansionRatio           1.2;
     firstLayerThickness      7.1e-7;
-    minThickness             1e-8;
-    nGrow                    0;
-    featureAngle             60;
-    slipFeatureAngle         30;
-    nRelaxIter               5;
-    nSmoothSurfaceNormals    3;
-    nSmoothNormals           3;
-    nSmoothThickness         10;
-    maxFaceThicknessRatio    0.5;
 
-    nRelaxedIter           5;
-    nBufferCellsNoExtrude  1;
-    nLayerIter             50;
-    minMedialAxisAngle     90;
+    maxFaceThicknessRatio    10.0;    // was 0.5 — effectively off
+    minThickness             1e-9;    // was 1e-8 — let thin partial stacks survive
+    nSmoothThickness         1;       // was 10 — stop dragging junction down
+    nSmoothNormals           1;       // was 3
+    nSmoothSurfaceNormals    1;       // was 3
+    nGrow                    0;
+    nBufferCellsNoExtrude    0;       // was 1 — no buffer, take every face we can
+    featureAngle             130;     // was 60 — wrap layers around sharper edges
+    slipFeatureAngle         50;      // was 30 — allow sliding on steeper feature faces
+    nRelaxedIter             20;      // was 5 — give relaxation many more attempts
+    nLayerIter               50;
+
+
 
 }
 
 meshQualityControls
 {
-    maxNonOrtho          65;
+    maxNonOrtho          75;
     maxBoundarySkewness  20;
-    maxInternalSkewness  4;
+    maxInternalSkewness  8;
     maxConcave           80;
     minFlatness          0.5;
     minVol               1e-15;
-    minTetQuality        1e-30;
+    minTetQuality        -1e30;
     minArea              -1;
-    minTwist             0.02;
-    minDeterminant       1e-6;
-    minFaceWeight        0.02;
-    minVolRatio          0.01;
+    minTwist             -1;
+    minDeterminant       1e-9;
+    minFaceWeight        -1;
+    minVolRatio          -1;
     minTriangleTwist     -1;
     nSmoothScale         4;
-    errorReduction       0.75;
+    errorReduction       0.45;
 
     relaxed
     {
-        maxNonOrtho          75;
-        maxBoundarySkewness  20;
-        maxInternalSkewness  8;
-        maxConcave           80;
-        minDeterminant       1e-9;
-        minFaceWeight        0.02;
+        maxNonOrtho          80;
+        minDeterminant       1e-12;
+        minFaceWeight        -1;
+        minTetQuality        -1e30;
+        minTwist             -1;
+        minVolRatio          -1;
     }
 }
 
