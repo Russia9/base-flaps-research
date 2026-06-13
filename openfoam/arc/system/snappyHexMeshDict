@@ -133,9 +133,9 @@ addLayersControls
     nBufferCellsNoExtrude    0;       // was 1 — no buffer, take every face we can
     featureAngle             130;     // was 60 — wrap layers around sharper edges
     slipFeatureAngle         50;      // was 30 — allow sliding on steeper feature faces
+    nRelaxIter               5;
     nRelaxedIter             20;      // was 5 — give relaxation many more attempts
     nLayerIter               50;
-
 
 
 }
