@@ -108,12 +108,7 @@ snapControls
 
 addLayersControls
 {
-    meshShrinker displacementMotionSolver;
-    solver       displacementLaplacian;
-    displacementLaplacianCoeffs
-    {
-        diffusivity quadratic inverseDistance (fuselage stabilizers);
-    }
+    meshShrinker displacementMedialAxis;
 
     relativeSizes false;
     layers
@@ -137,7 +132,9 @@ addLayersControls
     nRelaxedIter             20;      // was 5 — give relaxation many more attempts
     nLayerIter               50;
 
-
+    minMedialAxisAngle       90;
+    maxThicknessToMedialRatio 0.3;
+    nMedialAxisIter          10;   // optional, default is large; cap if slow
 }
 
 meshQualityControls
