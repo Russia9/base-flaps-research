@@ -27,11 +27,12 @@ axial_chamfer = 2.0;    // axial chamfer length at leading/trailing edge, mm
 // Resolution — set PREVIEW=false for STL export.
 PREVIEW  = false;
 
-FN_BODY  = PREVIEW ? 64  : 360;  // rotate_extrude segments (circumferential)
-FN_NOSE  = PREVIEW ? 32  : 360;  // ogive axial profile samples
-FN_CYL   = PREVIEW ? 20  : 360;  // cylinder axial segments
-                                  // 291 = ceil(570 mm / 1.96 mm) for ~1:1 quads
-FN_WING  = PREVIEW ? 64  : 360;  // stabilizer arc samples
+facet_target = 0.25;  // mm, must be < snappy L5 surface cell (~0.417mm)
+
+FN_BODY  = PREVIEW ? 64 : ceil(2*PI*R / facet_target);
+FN_NOSE  = PREVIEW ? 32 : ceil(ogive_len / facet_target);
+FN_CYL   = PREVIEW ? 20 : ceil(cyl_len / facet_target);
+FN_WING  = PREVIEW ? 64 : ceil((R_out*xi*PI/180) / facet_target);
 
 // ── Derived constants ─────────────────────────────────────────────────────────
 
