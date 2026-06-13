@@ -113,24 +113,24 @@ addLayersControls
     relativeSizes false;
     layers
     {
-        fuselage    { nSurfaceLayers 22; }
-        stabilizers { nSurfaceLayers 22; }
+        fuselage    { nSurfaceLayers 17; }
+        stabilizers { nSurfaceLayers 17; }
     }
     expansionRatio           1.2;
     firstLayerThickness      7.1e-7;
 
-    maxFaceThicknessRatio    10.0;    // was 0.5 — effectively off
-    minThickness             1e-9;    // was 1e-8 — let thin partial stacks survive
-    nSmoothThickness         1;       // was 10 — stop dragging junction down
-    nSmoothNormals           1;       // was 3
-    nSmoothSurfaceNormals    1;       // was 3
-    nGrow                    0;
-    nBufferCellsNoExtrude    0;       // was 1 — no buffer, take every face we can
-    featureAngle             130;     // was 60 — wrap layers around sharper edges
-    slipFeatureAngle         50;      // was 30 — allow sliding on steeper feature faces
+    maxFaceThicknessRatio    10.0;
+    minThickness             1e-9;
+    nSmoothThickness         5;
+    nSmoothNormals           3;
+    nSmoothSurfaceNormals    3;
+    nGrow                    1;
+    nBufferCellsNoExtrude    1;
+    featureAngle             60;
+    slipFeatureAngle         50;
     nRelaxIter               5;
-    nRelaxedIter             20;      // was 5 — give relaxation many more attempts
-    nLayerIter               50;
+    nRelaxedIter             20;
+    nLayerIter               8;
 
     minMedialAxisAngle       90;
     maxThicknessToMedialRatio 0.3;
