@@ -24,16 +24,6 @@ R_out         = 40.0;   // outer arc radius of full-thickness section
 root_embed    = 2.0;    // all root points embedded this far inside fuselage, mm
 axial_chamfer = 2.0;    // axial chamfer length at leading/trailing edge, mm
 
-// Resolution — set PREVIEW=false for STL export.
-PREVIEW  = false;
-
-facet_target = 0.25;  // mm, must be < snappy L5 surface cell (~0.417mm)
-
-FN_BODY  = PREVIEW ? 64 : ceil(2*PI*R / facet_target);
-FN_NOSE  = PREVIEW ? 32 : ceil(ogive_len / facet_target);
-FN_CYL   = PREVIEW ? 20 : ceil(cyl_len / facet_target);
-FN_WING  = PREVIEW ? 64 : ceil((R_out*xi*PI/180) / facet_target);
-
 // ── Derived constants ─────────────────────────────────────────────────────────
 
 R          = D / 2;
@@ -55,6 +45,17 @@ echo(str("Stabilizer length  = ", L,                 " mm"));
 echo(str("Root embed depth   = ", root_embed,        " mm"));
 echo(str("Cyl axial step     = ", cyl_len / FN_CYL,  " mm"));
 echo(str("Circ step          = ", 2 * 3.14159265 * R / FN_BODY, " mm"));
+
+
+// Resolution — set PREVIEW=false for STL export.
+PREVIEW  = false;
+
+facet_target = 0.25;  // mm, must be < snappy L5 surface cell (~0.417mm)
+
+FN_BODY  = PREVIEW ? 64 : ceil(2*PI*R / facet_target);
+FN_NOSE  = PREVIEW ? 32 : ceil(ogive_len / facet_target);
+FN_CYL   = PREVIEW ? 20 : ceil(cyl_len / facet_target);
+FN_WING  = PREVIEW ? 64 : ceil((R_out*xi*PI/180) / facet_target);
 
 // ── Fuselage ──────────────────────────────────────────────────────────────────
 
