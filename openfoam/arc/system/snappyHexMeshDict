@@ -55,8 +55,8 @@ geometry
 
 castellatedMeshControls
 {
-    maxGlobalCells   10000000;
-    maxLocalCells    1000000;
+    maxGlobalCells   12000000;
+    maxLocalCells    1400000;
     minRefinementCells 8;
     maxLoadUnbalance 0.10;
     nCellsBetweenLevels 4;
@@ -101,7 +101,7 @@ castellatedMeshControls
         noseCapCylinder
         {
             mode inside;
-            levels ((1E15 6));
+            levels ((1E15 5));
         }
     }
 
@@ -113,9 +113,9 @@ snapControls
 {
     nSmoothPatch    3;
     tolerance       2.0;
-    nSolveIter      50;
-    nRelaxIter      6;
-    nFeatureSnapIter 15;
+    nSolveIter      70;
+    nRelaxIter      8;
+    nFeatureSnapIter 20;
     implicitFeatureSnap false;
     explicitFeatureSnap true;
     multiRegionFeatureSnap false;
@@ -128,10 +128,10 @@ addLayersControls
     relativeSizes false;
     layers
     {
-        fuselage    { nSurfaceLayers 20; }
-        stabilizers { nSurfaceLayers 20; }
+        fuselage    { nSurfaceLayers 16; }
+        stabilizers { nSurfaceLayers 16; }
     }
-    expansionRatio           1.5;
+    expansionRatio           1.35;
     firstLayerThickness      7.1e-7;
 
     maxFaceThicknessRatio    10.0;
@@ -143,9 +143,9 @@ addLayersControls
     nBufferCellsNoExtrude    1;
     featureAngle             60;
     slipFeatureAngle         50;
-    nRelaxIter               5;
-    nRelaxedIter             20;
-    nLayerIter               10;
+    nRelaxIter               8;
+    nRelaxedIter             25;
+    nLayerIter               30;
 
     minMedialAxisAngle       90;
     maxThicknessToMedialRatio 0.3;
