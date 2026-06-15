@@ -55,7 +55,7 @@ geometry
 
 castellatedMeshControls
 {
-    maxGlobalCells   11000000;
+    maxGlobalCells   10000000;
     maxLocalCells    1000000;
     minRefinementCells 8;
     maxLoadUnbalance 0.10;
@@ -128,8 +128,8 @@ addLayersControls
     relativeSizes false;
     layers
     {
-        fuselage    { nSurfaceLayers 15; }
-        stabilizers { nSurfaceLayers 15; }
+        fuselage    { nSurfaceLayers 20; }
+        stabilizers { nSurfaceLayers 20; }
     }
     expansionRatio           1.5;
     firstLayerThickness      7.1e-7;
