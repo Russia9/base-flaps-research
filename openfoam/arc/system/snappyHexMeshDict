@@ -141,8 +141,8 @@ addLayersControls
     nSmoothSurfaceNormals    3;
     nGrow                    1;
     nBufferCellsNoExtrude    1;
-    featureAngle             60;
-    slipFeatureAngle         50;
+    featureAngle             130;
+    slipFeatureAngle         65;
     nRelaxIter               8;
     nRelaxedIter             25;
     nLayerIter               30;
