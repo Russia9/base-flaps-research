@@ -113,9 +113,9 @@ snapControls
 {
     nSmoothPatch    3;
     tolerance       2.0;
-    nSolveIter      70;
-    nRelaxIter      8;
-    nFeatureSnapIter 20;
+    nSolveIter      55;
+    nRelaxIter      6;
+    nFeatureSnapIter 15;
     implicitFeatureSnap false;
     explicitFeatureSnap true;
     multiRegionFeatureSnap false;
@@ -128,10 +128,10 @@ addLayersControls
     relativeSizes false;
     layers
     {
-        fuselage    { nSurfaceLayers 16; }
-        stabilizers { nSurfaceLayers 16; }
+        fuselage    { nSurfaceLayers 18; }
+        stabilizers { nSurfaceLayers 18; }
     }
-    expansionRatio           1.35;
+    expansionRatio           1.33;
     firstLayerThickness      7.1e-7;
 
     maxFaceThicknessRatio    10.0;
