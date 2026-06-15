@@ -43,6 +43,22 @@ geometry
         point2 (0.92 0.0 0.0);
         radius 0.065;
     }
+
+    noseCapCylinder
+    {
+        type searchableCylinder;
+        point1 (-0.005 0.0 0.0);
+        point2 ( 0.025 0.0 0.0);
+        radius 0.025;
+    }
+
+    finRegionCylinder
+    {
+        type searchableCylinder;
+        point1 (0.70 0.0 0.0);
+        point2 (0.92 0.0 0.0);
+        radius 0.075;
+    }
 };
 
 castellatedMeshControls
@@ -87,6 +103,20 @@ castellatedMeshControls
         {
             mode inside;
             levels ((1E15 3));
+        }
+
+        // Fine volume refinement wrapping the nose tip.
+        noseCapCylinder
+        {
+            mode inside;
+            levels ((1E15 6));
+        }
+
+        // Stronger refinement from just ahead of the fins through their trailing edge.
+        finRegionCylinder
+        {
+            mode inside;
+            levels ((1E15 4));
         }
     }
 
