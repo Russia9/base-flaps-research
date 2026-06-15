@@ -47,23 +47,23 @@ geometry
 
 castellatedMeshControls
 {
-    maxGlobalCells   8500000;
+    maxGlobalCells   11000000;
     maxLocalCells    1000000;
-    minRefinementCells 5;
+    minRefinementCells 8;
     maxLoadUnbalance 0.10;
-    nCellsBetweenLevels 3;
+    nCellsBetweenLevels 4;
     resolveFeatureAngle 30;
 
     features
     (
-        { file "fuselage.eMesh";    level 5; }
-        { file "stabilizers.eMesh"; level 5; }
+        { file "fuselage.eMesh";    level 7; }
+        { file "stabilizers.eMesh"; level 7; }
     );
 
     refinementSurfaces
     {
-        fuselage { level (4 5); }
-        stabilizers { level (4 5); }
+        fuselage { level (5 6); }
+        stabilizers { level (5 6); }
     }
 
     refinementRegions
@@ -113,10 +113,10 @@ addLayersControls
     relativeSizes false;
     layers
     {
-        fuselage    { nSurfaceLayers 17; }
-        stabilizers { nSurfaceLayers 17; }
+        fuselage    { nSurfaceLayers 15; }
+        stabilizers { nSurfaceLayers 15; }
     }
-    expansionRatio           1.2;
+    expansionRatio           1.5;
     firstLayerThickness      7.1e-7;
 
     maxFaceThicknessRatio    10.0;
@@ -130,7 +130,7 @@ addLayersControls
     slipFeatureAngle         50;
     nRelaxIter               5;
     nRelaxedIter             20;
-    nLayerIter               8;
+    nLayerIter               10;
 
     minMedialAxisAngle       90;
     maxThicknessToMedialRatio 0.3;
