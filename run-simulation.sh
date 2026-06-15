@@ -49,8 +49,8 @@ processor_count() {
 }
 
 require_body_patch() {
-    grep -q "body" "$1" || {
-        echo "error: $1 is missing the body patch" >&2
+    grep -q "type.*wall" "$1" || {
+        echo "error: $1 has no wall-type patch" >&2
         exit 1
     }
 }
