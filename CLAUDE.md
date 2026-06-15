@@ -27,8 +27,8 @@ python3 scripts/create_case.py --force --case openfoam/test --N 2 --xi 45 --LD 1
 
 `create_case.py` is the step that replaces or creates a case from
 `openfoam/template/`; `rebuild-mesh.sh` preserves case dictionaries and only
-removes generated mesh/run artifacts. The mesh runs `mpirun -np 6` by default to
-leave two cores free on an 8-core workstation; override with `NP=<n>`.
+removes generated mesh/run artifacts. The mesh runs `mpirun -np 12` by default;
+override with `NP=<n>`.
 `MAX_CELLS=11000000` is enforced after `checkMesh` by default; set `MAX_CELLS=0`
 only for exploratory runs.
 
@@ -88,10 +88,14 @@ CofR `(0 0 0)` (nose tip) and `rho rho` — HiSA carries a live `rho` field and
 real pressure in Pa, so the object integrates true forces. `force.dat`/`moment.dat`
 are therefore in N / N·m (**no coefficient math in OpenFOAM**), and
 `scripts/post_process.py` does the `q∞` normalization with `D = 0.08 m`,
-`S = πD²/4`, and per-case `q∞` from `freestreamProperties`. Output:
-`results/<case-name>/coefficients.csv` with `Cx, Cy, Cz, Mx, My, Mz` plus split
-pressure/viscous components. The split exists so the same forces log can be
-re-normalized against different reference quantities without rerunning the solver.
+`S = πD²/4`, and per-case `q∞` from `freestreamProperties`. It writes two files
+under `results/<case-name>/`:
+- `coefficients.csv` — `Cx, Cy, Cz, Mx, My, Mz` plus split pressure/viscous
+  columns (`_p`, `_v` suffix), normalized by `q∞·S` / `q∞·S·D`.
+- `forces.csv` — raw N / N·m from `force.dat`/`moment.dat`, same column layout.
+
+The split exists so the same forces log can be re-normalized against different
+reference quantities without rerunning the solver.
 
 **`force.dat`/`moment.dat` format (v2512):** whitespace-separated columns
 `time | total(x y z) | pressure(x y z) | viscous(x y z)` — no parentheses, and
@@ -100,6 +104,18 @@ viscous`. The parser in `post_process.py` reads `total` directly and keeps the
 pressure/viscous split; do not reintroduce a parenthesized or
 pressure/viscous/porous-ordered parser (an earlier version assumed the old
 format and failed to parse any data row).
+
+## Sweep case naming
+
+`scripts/sweep.py` generates 108 cases under `openfoam/cases/` (default `--root`)
+with names in the form `N{N}_xi{xi}_LD{ld}_M{mach}`, where decimal points are
+replaced by `p` (e.g., `N2_xi45_LD1p0_M1p5`). `sweep.py` must be run from the
+repo root so its `from create_case import` resolves the sibling module.
+
+```bash
+python3 scripts/sweep.py --dry-run   # print all 108 command triplets
+python3 scripts/sweep.py --force     # create all case directories (no mesh/solve)
+```
 
 ## Coordinate system
 
@@ -110,16 +126,21 @@ in the post-processor — keep these consistent if `D` ever changes.
 
 ## Generated artifacts — do not hand-edit
 
-- `openfoam/test/constant/triSurface/body.stl` — produced by OpenSCAD via
-  `rebuild-mesh.sh`. Edit `geometry/model.scad` and regenerate; never `sed` the STL.
-- `openfoam/test/processor*/` — produced by `decomposePar`. Don't edit
-  per-processor files; change `system/` dicts on master and re-decompose.
-- `openfoam/test/constant/polyMesh/` — must be the final snapped mesh with the
-  `body` wall patch. `snappyHexMesh` runs with `-overwrite`, then the case is
+- `<case>/constant/triSurface/body.stl` — produced by OpenSCAD via
+  `rebuild-mesh.sh`. Edit `geometry/model.scad` (or `geometry/arc_stabilizers.scad`)
+  and regenerate; never `sed` the STL. Use `--geometry path/to/alt.scad` to
+  override which geometry file `rebuild-mesh.sh` passes to OpenSCAD.
+- `<case>/processor*/` — produced by `decomposePar`. Don't edit per-processor
+  files; change `system/` dicts on master and re-decompose.
+- `<case>/constant/polyMesh/` — must be the final snapped mesh with the `body`
+  wall patch. `snappyHexMesh` runs with `-overwrite`, then the case is
   redecomposed from that final mesh.
 - The default mesh keeps `addLayers false` to avoid increasing the sweep cell
   count. Boundary-layer meshes belong in a separate profile with an explicit
   y+ target and cell budget.
+- `run-simulation.sh` clears `log.hisa`, `log.reconstructPar`,
+  `log.checkMesh.dryRun`, and `postProcessing/` before each run, while
+  preserving the mesh (`processor*/constant/`) and `0/` initial fields.
 - Anything under `openfoam/` other than `openfoam/template/` is gitignored
   (see `.gitignore`).
 

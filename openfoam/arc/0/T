@@ -29,7 +29,12 @@ boundaryField
         T               $TInf;
         value           $internalField;
     }
-    body
+    fuselage
+    {
+        type            characteristicWallTemperature;
+        value           $internalField;
+    }
+    stabilizers
     {
         type            characteristicWallTemperature;
         value           $internalField;
