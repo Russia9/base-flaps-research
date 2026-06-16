@@ -75,6 +75,7 @@ yPlus
     type         yPlus;
     libs         (fieldFunctionObjects);
     writeControl writeTime;
+    log yes;
 }
 
 wallShearStress
