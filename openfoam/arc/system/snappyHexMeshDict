@@ -131,7 +131,7 @@ addLayersControls
         fuselage    { nSurfaceLayers 18; }
         stabilizers { nSurfaceLayers 18; }
     }
-    expansionRatio           1.33;
+    expansionRatio           1.4;
     firstLayerThickness      7.1e-7;
 
     maxFaceThicknessRatio    10.0;
@@ -141,8 +141,8 @@ addLayersControls
     nSmoothSurfaceNormals    3;
     nGrow                    1;
     nBufferCellsNoExtrude    1;
-    featureAngle             130;
-    slipFeatureAngle         65;
+    featureAngle             150;
+    slipFeatureAngle         75;
     nRelaxIter               8;
     nRelaxedIter             25;
     nLayerIter               30;
