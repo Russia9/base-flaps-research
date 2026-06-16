@@ -129,26 +129,26 @@ addLayersControls
     layers
     {
         fuselage    { nSurfaceLayers 15; }
-        stabilizers { nSurfaceLayers 15; }
+        stabilizers { nSurfaceLayers 12; }
     }
-    expansionRatio           1.5;
+    expansionRatio           1.25;
     firstLayerThickness      7.1e-7;
 
     maxFaceThicknessRatio    10.0;
-    minThickness             1e-9;
+    minThickness             3.5e-7;
     nSmoothThickness         5;
-    nSmoothNormals           3;
-    nSmoothSurfaceNormals    3;
-    nGrow                    1;
-    nBufferCellsNoExtrude    1;
-    featureAngle             150;
-    slipFeatureAngle         75;
+    nSmoothNormals           5;
+    nSmoothSurfaceNormals    5;
+    nGrow                    0;
+    nBufferCellsNoExtrude    0;
+    featureAngle             130;
+    slipFeatureAngle         30;
     nRelaxIter               8;
-    nRelaxedIter             25;
-    nLayerIter               30;
+    nRelaxedIter             50;
+    nLayerIter               50;
 
     minMedialAxisAngle       90;
-    maxThicknessToMedialRatio 0.3;
+    maxThicknessToMedialRatio 0.6;
     nMedialAxisIter          10;   // optional, default is large; cap if slow
 }
 
