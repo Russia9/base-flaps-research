@@ -51,6 +51,43 @@ geometry
         point2 ( 0.025 0.0 0.0);
         radius 0.025;
     }
+
+    noseTipCylinder
+    {
+        type searchableCylinder;
+        point1 (-0.005 0.0 0.0);
+        point2 ( 0.015 0.0 0.0);
+        radius 0.015;
+    }
+
+    // Fin/fuselage junctions, one box per stabilizer (+Y, +Z, -Y, -Z).
+    finJunctionPosY
+    {
+        type searchableBox;
+        min (0.65  0.35 -0.02);
+        max (0.67  0.50  0.02);
+    }
+
+    finJunctionPosZ
+    {
+        type searchableBox;
+        min (0.65 -0.02  0.35);
+        max (0.67  0.02  0.50);
+    }
+
+    finJunctionNegY
+    {
+        type searchableBox;
+        min (0.65 -0.50 -0.02);
+        max (0.67 -0.35  0.02);
+    }
+
+    finJunctionNegZ
+    {
+        type searchableBox;
+        min (0.65 -0.02 -0.50);
+        max (0.67  0.02 -0.35);
+    }
 };
 
 castellatedMeshControls
@@ -101,6 +138,38 @@ castellatedMeshControls
         noseCapCylinder
         {
             mode inside;
+            levels ((1E15 4));
+        }
+
+        // Finest nested refinement at the nose tip.
+        noseTipCylinder
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+
+        // Local refinement at each fin/fuselage junction.
+        finJunctionPosY
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+
+        finJunctionPosZ
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+
+        finJunctionNegY
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+
+        finJunctionNegZ
+        {
+            mode inside;
             levels ((1E15 5));
         }
     }
@@ -149,7 +218,7 @@ addLayersControls
 
     minMedialAxisAngle       90;
     maxThicknessToMedialRatio 0.3;
-    nMedialAxisIter          10;   // optional, default is large; cap if slow
+    nMedialAxisIter          10;
 }
 
 meshQualityControls

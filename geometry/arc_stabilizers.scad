@@ -17,6 +17,8 @@ N             = 4;      // number of stabilizers
 xi            = 90;     // stabilizer arc span, degrees
 L             = 140.0;  // axial stabilizer chord length, mm
 
+R_nose        = 1.0;    // spherical nose-tip radius, mm — small blunting, tangent to ogive
+
 R_in          = 36.0;   // inner arc radius of full-thickness section
 R_edge        = 38.0;   // sharp leading/trailing edge arc radius
 R_out         = 40.0;   // outer arc radius of full-thickness section
@@ -33,12 +35,26 @@ ogive_len  = sqrt(ogive_rho^2 - (ogive_rho - R)^2);
 cyl_len    = total_len - ogive_len;
 root_offset = R_edge / sqrt(2);
 
+// Spherically blunted tangent ogive: a tip sphere of radius R_nose, internally
+// tangent to the ogive arc. The ogive circle (centre (ogive_len, -(ogive_rho-R)),
+// radius ogive_rho) is left untouched so it still meets the cylinder at ogive_len;
+// only the sharp front is replaced by the cap, so the apex recedes to nose_apex_x.
+nose_s      = sqrt((ogive_rho - R_nose)^2 - (ogive_rho - R)^2);
+nose_xo     = ogive_len - nose_s;                                    // cap centre (axial)
+nose_apex_x = nose_xo - R_nose;                                      // foremost point on axis
+nose_tan_x  = ogive_len - ogive_rho * nose_s / (ogive_rho - R_nose); // ogive tangency (axial)
+nose_tan_r  = (ogive_rho - R) * R_nose / (ogive_rho - R_nose);       // ogive tangency (radius)
+nose_phi_t  = atan2(nose_tan_r, nose_tan_x - nose_xo);               // cap arc end angle, deg
+
+assert(R_nose > 0 && R_nose < R, "Require 0 < R_nose < R");
 assert(R_in   < R_edge,         "Require R_in < R_edge");
 assert(R_edge < R_out,          "Require R_edge < R_out");
 assert(R_out  == R,             "R_out must equal fuselage radius R");
 assert(root_embed > 0,          "root_embed must be positive");
 assert(2 * axial_chamfer < L,   "Require 2 * axial_chamfer < L");
 
+echo(str("Nose tip radius    = ", R_nose,            " mm"));
+echo(str("Nose apex at x      = ", nose_apex_x,       " mm"));
 echo(str("Ogive length       = ", ogive_len,         " mm"));
 echo(str("Cylinder length    = ", cyl_len,           " mm"));
 echo(str("Stabilizer length  = ", L,                 " mm"));
@@ -53,6 +69,7 @@ PREVIEW  = false;
 facet_target = 0.25;  // mm, must be < snappy L5 surface cell (~0.417mm)
 
 FN_BODY  = PREVIEW ? 64 : ceil(2*PI*R / facet_target);
+FN_CAP   = PREVIEW ? 12 : max(8, ceil(R_nose * (180 - nose_phi_t) * PI/180 / facet_target));
 FN_NOSE  = PREVIEW ? 32 : ceil(ogive_len / facet_target);
 FN_CYL   = PREVIEW ? 20 : ceil(cyl_len / facet_target);
 FN_WING  = PREVIEW ? 64 : ceil((R_out*xi*PI/180) / facet_target);
@@ -62,19 +79,22 @@ FN_WING  = PREVIEW ? 64 : ceil((R_out*xi*PI/180) / facet_target);
 function ogive_r(x) =
     sqrt(ogive_rho^2 - (ogive_len - x)^2) - (ogive_rho - R);
 
-// Profile: (r, z), tip at z=0, base at z=total_len.
+// Profile: (r, z), blunt apex at z=nose_apex_x, base at z=total_len.
 //
-// Three sections:
-//   1. Nose tip point         [0, 0]
-//   2. Ogive curve            FN_NOSE samples, uniform in x
+// Four sections:
+//   1. Spherical nose cap     FN_CAP samples, apex on axis → ogive tangency
+//   2. Ogive curve            FN_NOSE samples, tangency → base, uniform in x
 //   3. Cylinder axial rungs   FN_CYL intermediate z-values at r=R
 //      (without these the cylinder is one 570 mm tall quad → 290:1 sliver)
 //   4. Base closure           [R, total_len], [0, total_len]
 //
 function body_profile() = concat(
-    [[0, 0]],
+    [for (i = [0 : FN_CAP])
+        let(phi = 180 - (180 - nose_phi_t) * i / FN_CAP)
+        [R_nose * sin(phi), nose_xo + R_nose * cos(phi)]
+    ],
     [for (i = [1 : FN_NOSE])
-        let(x = i * ogive_len / FN_NOSE)
+        let(x = nose_tan_x + i * (ogive_len - nose_tan_x) / FN_NOSE)
         [ogive_r(x), x]
     ],
     [for (j = [1 : FN_CYL - 1])
