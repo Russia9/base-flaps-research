@@ -64,8 +64,8 @@ castellatedMeshControls
 
     features
     (
-        { file "fuselage.eMesh";    level 7; }
-        { file "stabilizers.eMesh"; level 7; }
+        { file "fuselage.eMesh";    level 6; }
+        { file "stabilizers.eMesh"; level 6; }
     );
 
     refinementSurfaces
