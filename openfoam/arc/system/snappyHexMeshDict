@@ -96,7 +96,7 @@ castellatedMeshControls
     maxLocalCells    1200000;
     minRefinementCells 8;
     maxLoadUnbalance 0.10;
-    nCellsBetweenLevels 4;
+    nCellsBetweenLevels 3;
     resolveFeatureAngle 30;
 
     features
@@ -208,16 +208,16 @@ addLayersControls
     nSmoothThickness         5;
     nSmoothNormals           3;
     nSmoothSurfaceNormals    3;
-    nGrow                    1;
+    nGrow                    0;
     nBufferCellsNoExtrude    1;
-    featureAngle             150;
+    featureAngle             160;
     slipFeatureAngle         75;
     nRelaxIter               8;
     nRelaxedIter             25;
     nLayerIter               30;
 
-    minMedialAxisAngle       90;
-    maxThicknessToMedialRatio 0.3;
+    minMedialAxisAngle       80;
+    maxThicknessToMedialRatio 0.6;
     nMedialAxisIter          10;
 }
 

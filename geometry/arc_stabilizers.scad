@@ -17,7 +17,7 @@ N             = 4;      // number of stabilizers
 xi            = 90;     // stabilizer arc span, degrees
 L             = 140.0;  // axial stabilizer chord length, mm
 
-R_nose        = 1.0;    // spherical nose-tip radius, mm — small blunting, tangent to ogive
+R_nose        = 0.5;    // spherical nose-tip radius, mm — small blunting, tangent to ogive
 
 R_in          = 36.0;   // inner arc radius of full-thickness section
 R_edge        = 38.0;   // sharp leading/trailing edge arc radius

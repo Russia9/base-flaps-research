@@ -183,7 +183,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--xi", type=float, choices=[30.0, 45.0, 90.0], required=True, help="fin arc angle in degrees")
     p.add_argument("--LD", type=float, choices=[0.5, 1.0, 1.5], required=True, help="fin length divided by D")
     p.add_argument("--TD", type=float, default=0.02, help="fin thickness divided by D")
-    p.add_argument("--Mach", type=float, choices=[1.5, 2.0, 2.5], required=True, help="freestream Mach number")
+    p.add_argument("--Mach", type=float, required=True, help="freestream Mach number")
     p.add_argument("--gamma", type=float, default=1.4, help="specific heat ratio for UInf calculation")
     return p
 
