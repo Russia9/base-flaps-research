@@ -66,7 +66,7 @@ echo(str("Circ step          = ", 2 * 3.14159265 * R / FN_BODY, " mm"));
 // Resolution — set PREVIEW=false for STL export.
 PREVIEW  = false;
 
-facet_target = 0.18;  // mm, must be < snappy L5 surface cell (~0.417mm)
+facet_target = 0.23;  // mm, must be < snappy L5 surface cell (~0.417mm)
 
 FN_BODY  = PREVIEW ? 64 : ceil(2*PI*R / facet_target);
 FN_CAP   = PREVIEW ? 12 : max(8, ceil(R_nose * (180 - nose_phi_t) * PI/180 / facet_target));
