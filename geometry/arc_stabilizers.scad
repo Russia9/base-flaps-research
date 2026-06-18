@@ -17,7 +17,7 @@ N             = 4;      // number of stabilizers
 xi            = 90;     // stabilizer arc span, degrees
 L             = 140.0;  // axial stabilizer chord length, mm
 
-R_nose        = 0.5;    // spherical nose-tip radius, mm — small blunting, tangent to ogive
+R_nose        = 0.5;  // spherical nose-tip radius, mm — small blunting, tangent to ogive
 
 R_in          = 36.0;   // inner arc radius of full-thickness section
 R_edge        = 38.0;   // sharp leading/trailing edge arc radius
@@ -66,7 +66,7 @@ echo(str("Circ step          = ", 2 * 3.14159265 * R / FN_BODY, " mm"));
 // Resolution — set PREVIEW=false for STL export.
 PREVIEW  = false;
 
-facet_target = 0.25;  // mm, must be < snappy L5 surface cell (~0.417mm)
+facet_target = 0.18;  // mm, must be < snappy L5 surface cell (~0.417mm)
 
 FN_BODY  = PREVIEW ? 64 : ceil(2*PI*R / facet_target);
 FN_CAP   = PREVIEW ? 12 : max(8, ceil(R_nose * (180 - nose_phi_t) * PI/180 / facet_target));
