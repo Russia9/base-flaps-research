@@ -1,0 +1,249 @@
+FoamFile { version 2.0; format ascii; class dictionary; object snappyHexMeshDict; }
+
+castellatedMesh true;
+snap            true;
+addLayers       true;
+
+geometry
+{
+    fuselage.stl
+    {
+        type triSurfaceMesh;
+        scale 0.001;
+        name fuselage;
+    }
+
+
+    refinementCylinder
+    {
+        type searchableCylinder;
+        point1 (-0.20 0.0 0.0);
+        point2 (2.00 0.0 0.0);
+        radius 0.36;
+    }
+
+    nearBodyCylinder
+    {
+        type searchableCylinder;
+        point1 (-0.10 0.0 0.0);
+        point2 (1.20 0.0 0.0);
+        radius 0.12;
+    }
+
+    aftBaseCylinder
+    {
+        type searchableCylinder;
+        point1 (0.76 0.0 0.0);
+        point2 (0.92 0.0 0.0);
+        radius 0.065;
+    }
+
+    noseCapCylinder
+    {
+        type searchableCylinder;
+        point1 (-0.005 0.0 0.0);
+        point2 ( 0.025 0.0 0.0);
+        radius 0.025;
+    }
+
+    noseTipCylinder
+    {
+        type searchableCylinder;
+        point1 (-0.005 0.0 0.0);
+        point2 ( 0.015 0.0 0.0);
+        radius 0.015;
+    }
+
+    // Fin/fuselage junctions, one box per stabilizer (+Y, +Z, -Y, -Z).
+    finJunctionPosY
+    {
+        type searchableBox;
+        min (0.65  0.35 -0.02);
+        max (0.67  0.50  0.02);
+    }
+
+    finJunctionPosZ
+    {
+        type searchableBox;
+        min (0.65 -0.02  0.35);
+        max (0.67  0.02  0.50);
+    }
+
+    finJunctionNegY
+    {
+        type searchableBox;
+        min (0.65 -0.50 -0.02);
+        max (0.67 -0.35  0.02);
+    }
+
+    finJunctionNegZ
+    {
+        type searchableBox;
+        min (0.65 -0.02 -0.50);
+        max (0.67  0.02 -0.35);
+    }
+};
+
+castellatedMeshControls
+{
+    maxGlobalCells   10500000;
+    maxLocalCells    1200000;
+    minRefinementCells 8;
+    maxLoadUnbalance 0.10;
+    nCellsBetweenLevels 3;
+    resolveFeatureAngle 30;
+
+    features
+    (
+        { file "fuselage.eMesh";    level 6; }
+    );
+
+    refinementSurfaces
+    {
+        fuselage { level (5 6); }
+    }
+
+    refinementRegions
+    {
+        // Broad refinement from upstream of the nose through 1.5L downstream.
+        refinementCylinder
+        {
+            mode inside;
+            levels ((1E15 1));
+        }
+
+        // Stronger nested refinement around the body and immediate wake.
+        nearBodyCylinder
+        {
+            mode inside;
+            levels ((1E15 2));
+        }
+
+        // Local support for the thin fin/body-base junction.
+        aftBaseCylinder
+        {
+            mode inside;
+            levels ((1E15 3));
+        }
+
+        // Fine volume refinement wrapping the nose tip.
+        noseCapCylinder
+        {
+            mode inside;
+            levels ((1E15 4));
+        }
+
+        // Finest nested refinement at the nose tip.
+        noseTipCylinder
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+
+        // Local refinement at each fin/fuselage junction.
+        finJunctionPosY
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+
+        finJunctionPosZ
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+
+        finJunctionNegY
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+
+        finJunctionNegZ
+        {
+            mode inside;
+            levels ((1E15 5));
+        }
+    }
+
+    locationInMesh (0.4 0.1 0.0);  // inside fluid, outside the 40 mm body radius
+    allowFreeStandingZoneFaces true;
+}
+
+snapControls
+{
+    nSmoothPatch    3;
+    tolerance       2.0;
+    nSolveIter      55;
+    nRelaxIter      6;
+    nFeatureSnapIter 15;
+    implicitFeatureSnap false;
+    explicitFeatureSnap true;
+    multiRegionFeatureSnap false;
+}
+
+addLayersControls
+{
+    meshShrinker displacementMedialAxis;
+
+    relativeSizes false;
+    layers
+    {
+        fuselage    { nSurfaceLayers 15; }
+    }
+    expansionRatio           1.5;
+    firstLayerThickness      7.1e-7;
+
+    maxFaceThicknessRatio    10.0;
+    minThickness             1e-9;
+    nSmoothThickness         5;
+    nSmoothNormals           3;
+    nSmoothSurfaceNormals    3;
+    nGrow                    0;
+    nBufferCellsNoExtrude    1;
+    featureAngle             160;
+    slipFeatureAngle         75;
+    nRelaxIter               8;
+    nRelaxedIter             25;
+    nLayerIter               30;
+
+    minMedialAxisAngle       80;
+    maxThicknessToMedialRatio 0.6;
+    nMedialAxisIter          10;
+}
+
+meshQualityControls
+{
+    maxNonOrtho          75;
+    maxBoundarySkewness  20;
+    maxInternalSkewness  8;
+    maxConcave           80;
+    minFlatness          0.5;
+    minVol               1e-15;
+    minTetQuality        -1e30;
+    minArea              -1;
+    minTwist             -1;
+    minDeterminant       1e-9;
+    minFaceWeight        -1;
+    minVolRatio          -1;
+    minTriangleTwist     -1;
+    nSmoothScale         4;
+    errorReduction       0.45;
+
+    relaxed
+    {
+        maxNonOrtho          80;
+        minDeterminant       1e-12;
+        minFaceWeight        -1;
+        minTetQuality        -1e30;
+        minTwist             -1;
+        minVolRatio          -1;
+    }
+}
+
+writeFlags
+(
+    scalarLevels
+);
+
+mergeTolerance 1e-8;

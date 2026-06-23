@@ -9,4 +9,6 @@ openfoam/*
 !openfoam/template/**
 !openfoam/arc/
 !openfoam/arc/**
+!openfoam/arc_no_stab/
+!openfoam/arc_no_stab/**
 openfoam/template/*.foam
