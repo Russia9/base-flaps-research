@@ -18,42 +18,42 @@ The ogive is tangent to the cylinder at the junction (no shoulder discontinuity)
 
 ### Fins
 
-Arc-shaped fins attached to the aft base of the fuselage, extending axially rearward. The outer surface is flush with the fuselage base (radius = D/2); the inner surface is offset inward by the fin thickness.
+Arc-shaped fins attached to the aft base of the fuselage, extending axially rearward. The outer arc is flush with the fuselage base (R_out = D/2); the section tapers to a knife edge at the leading and trailing arcs.
 
 ```
 Cross-section view (perpendicular to axis):
 
         ← xi →
     ___________
-   /           \   ← outer arc, radius D/2
-  |  _________ |
-  | /         \|   ← inner arc, radius D/2 - t
+   /           \   ← outer arc,  R_out  = 40 mm (= D/2)
+  |  _________ |   ← edge arc,   R_edge = 38 mm (knife edge)
+  | /         \|   ← inner arc,  R_in   = 36 mm
   |/           |
 ```
 
-**Fin parameters:**
+**Fin parameters** (`geometry/arc_stabilizers.scad`):
 
-| Parameter | Symbol | Values |
-|---|---|---|
-| Number of fins | N | 1, 2, 3, 4 |
-| Arc angle | ξ | 30°, 45°, 90° |
-| Fin length / diameter | L/D | 0.5, 1.0, 1.5 |
-| Thickness / diameter | t/D | 0.02 (parametric) |
+| Parameter | Symbol | Scad variable | Current value |
+|---|---|---|---|
+| Number of fins | N | `N` | 4 (`openfoam/arc`), 0 (`openfoam/arc_no_stab`) |
+| Arc angle | ξ | `xi` | 90° |
+| Fin chord | L | `L` | 140 mm (L/D = 1.75) |
+| Arc radii | — | `R_in`, `R_edge`, `R_out` | 36 / 38 / 40 mm (fixed) |
 
-**Fin placement:** The first fin is always centered on the +Y axis. Additional fins are placed at equal angular spacing (360°/N). For odd N the configuration is laterally asymmetric.
+`L` is absolute millimetres, not a ratio — `R_in`, `R_edge`, and `R_out` are likewise absolute, and `assert(R_out == R)` pins `D` to 80 mm unless all three are changed together.
+
+**Fin placement:** The first fin is always centered on the +Y axis. Additional fins are placed at equal angular spacing (360°/N). For odd N the configuration is laterally asymmetric. `N = 0` emits the bare fuselage.
 
 ## Parameter Space
 
-Full factorial sweep:
+The full 108-case factorial sweep (N × ξ × L/D × Ma) is the eventual target but is not currently driven by any script. Work is presently on two hand-tuned cases at Ma 1.5:
 
-```
-N ∈ {1, 2, 3, 4}
-ξ ∈ {30°, 45°, 90°}
-L/D ∈ {0.5, 1.0, 1.5}
-Ma ∈ {1.5, 2.0, 2.5}
+| Case | N | ξ | L | Purpose |
+|---|---|---|---|---|
+| `openfoam/arc` | 4 | 90° | 140 mm | Finned configuration |
+| `openfoam/arc_no_stab` | 0 | — | — | Clean-body baseline |
 
-Total: 4 × 3 × 3 × 3 = 108 cases
-```
+Mach variants are produced with `scripts/create_case.py --template openfoam/arc --Mach <M>`.
 
 ## Flow Conditions
 
@@ -74,14 +74,14 @@ All coefficients use **D** as the reference length and **πD²/4** as the refere
 | M_x | Rolling moment coefficient |
 | M_y, M_z | Pitching / yawing moment coefficients |
 
-All six are written per time step by `scripts/post_process.py` to `results/<case>/coefficients.csv`, along with split pressure/viscous components. For symmetric configurations (N = 2, 4 at 0° AoA) the off-axial components vanish by symmetry; non-zero values are expected for N = 1 and N = 3.
+All six are written per time step by `scripts/post_process.py` to `results/<case>/coefficients.csv`, along with split pressure/viscous components. For symmetric configurations (N = 0, 2, 4 at 0° AoA) the off-axial components vanish by symmetry; non-zero values are expected for N = 1 and N = 3.
 
 ### Extracting coefficients from a solved case
 
 `run-simulation.sh` runs the post-processor automatically after `reconstructPar`. To (re-)generate the CSV from an already-solved case without rerunning the solver:
 
 ```bash
-python3 scripts/post_process.py openfoam/test
+python3 scripts/post_process.py openfoam/arc_no_stab
 ```
 
 The script reads:
@@ -109,7 +109,7 @@ It also prints a convergence summary (mean over the last 10% of samples). Use th
 | Surface mesh export | STL via OpenSCAD |
 | Background mesh | blockMesh (OpenFOAM v2512) |
 | Volume mesh | snappyHexMesh (OpenFOAM v2512) |
-| CFD solver | rhoCentralFoam (OpenFOAM v2512) |
+| CFD solver | HiSA (density-based, pseudo-transient steady state) |
 | Turbulence model | k-ω SST |
 | Post-processing | Python 3 (stdlib only) |
 | Visualization | ParaView (open `case.foam`) |
@@ -126,29 +126,30 @@ work unless corresponding files are added.
 ```
 base-flaps-research/
 ├── geometry/
-│   └── model.scad              # Parametric fuselage + fins (CLI-overridable: N, xi, LD, TD, D)
+│   └── arc_stabilizers.scad    # Parametric fuselage + arc stabilizers
+│                               # (CLI-overridable: D, N, xi, L, EXPORT)
 ├── openfoam/
-│   └── template/               # Base case (solver settings, BCs, function objects)
-│       ├── 0/                  # U, p, T, k, omega, nut, alphat initial/boundary fields
-│       ├── constant/
-│       │   ├── caseProperties        # geometry/Mach parameters consumed by rebuild-mesh.sh
-│       │   ├── freestreamProperties   # SINGLE source of truth (pInf, TInf, UInfMag, UInf, RGas)
-│       │   ├── thermophysicalProperties
-│       │   └── turbulenceProperties
-│       └── system/
-│           ├── controlDict             # functions { #include "postProcess" }
-│           ├── postProcess             # forces, MachNo, schlieren, magGradP, Cp
-│           ├── blockMeshDict, snappyHexMeshDict, decomposeParDict, …
+│   ├── arc/                    # Finned case, N = 4 — also the source case for create_case.py
+│   │   ├── 0/                  # U, p, T, k, omega, nut, alphat initial/boundary fields
+│   │   ├── constant/
+│   │   │   ├── caseProperties        # D, N, xi, L, Mach, gamma — consumed by rebuild-mesh.sh
+│   │   │   ├── freestreamProperties   # SINGLE source of truth (pInf, TInf, UInfMag, UInf, RGas)
+│   │   │   ├── thermophysicalProperties
+│   │   │   └── turbulenceProperties
+│   │   └── system/
+│   │       ├── controlDict             # functions { #include "postProcess" }
+│   │       ├── postProcess             # forces, MachNo, schlieren, magGradP, Cp
+│   │       ├── blockMeshDict, snappyHexMeshDict, decomposeParDict, …
+│   └── arc_no_stab/            # Clean-body baseline, N = 0 (arc minus the stabilizers)
 ├── scripts/
-│   ├── create_case.py          # template → parameterized case
-│   ├── sweep.py                # enumerate/create the 108-case sweep
+│   ├── create_case.py          # clone a case, retarget Mach + geometry parameters
 │   └── post_process.py         # forces.dat → results/<case>/coefficients.csv (Cx..Mz)
 ├── rebuild-mesh.sh             # OpenSCAD → STL → blockMesh + parallel snappyHexMesh -overwrite + decompose
 ├── run-simulation.sh           # dry-run/solve → reconstructPar → post_process
 └── results/                    # Per-case coefficient CSVs (written by post_process.py)
 ```
 
-Anything under `openfoam/` other than `openfoam/template/` is gitignored. Generated cases live under `openfoam/test` or `openfoam/cases/*`.
+Anything under `openfoam/` other than `openfoam/arc/` and `openfoam/arc_no_stab/` is gitignored, so generated Mach variants stay untracked.
 
 ## Quickstart
 
@@ -158,32 +159,26 @@ Use a Linux shell with OpenFOAM v2512 sourced, for example:
 source /path/to/OpenFOAM-v2512/etc/bashrc
 ```
 
-Create, mesh, validate, and solve the baseline case:
+Mesh, validate, and solve the clean-body baseline:
 
 ```bash
-python3 scripts/create_case.py --force --case openfoam/test --N 2 --xi 45 --LD 1.0 --TD 0.02 --Mach 1.5
-./rebuild-mesh.sh openfoam/test
-./run-simulation.sh --dry-run openfoam/test
-./run-simulation.sh openfoam/test
+./rebuild-mesh.sh openfoam/arc_no_stab
+./run-simulation.sh --dry-run openfoam/arc_no_stab
+./run-simulation.sh openfoam/arc_no_stab
 ```
 
-`rebuild-mesh.sh` reads geometry from `constant/caseProperties`, runs parallel `snappyHexMesh -overwrite`, reconstructs the final snapped mesh into `constant/polyMesh`, then decomposes that final mesh for the solver. The scripts default to `NP=6` so two cores remain free on an 8-core workstation; override with `NP=<n>` if needed. `MAX_CELLS=11000000` is enforced by default after `checkMesh`; set `MAX_CELLS=0` to disable the guard for exploratory runs. `run-simulation.sh` cleans prior run outputs from the case while preserving the mesh and `0/` fields. If OpenFOAM's parallel dry-run path hits the known `MPI_ERR_TRUNCATE` failure, `run-simulation.sh --dry-run` retries a serial dry-run on the reconstructed master mesh and keeps both attempts in `log.rhoCentralFoam.dryRun`.
-
-The default template intentionally keeps `addLayers false`. This is the bounded-cell validation mesh for the sweep. Boundary-layer meshes should be introduced as a separate higher-cost profile with an explicit y+ target and cell budget.
-
-List the full 108-case command set:
+The finned case is the same three commands against `openfoam/arc`. To create a case at a different Mach (or a different fin count), clone an existing one:
 
 ```bash
-python3 scripts/sweep.py --dry-run
+python3 scripts/create_case.py --force --case openfoam/arc_M2p0 --N 4 --xi 90 --L 140 --Mach 2.0
+./rebuild-mesh.sh openfoam/arc_M2p0
 ```
 
-Create all case directories without meshing or solving them:
+`create_case.py` rewrites `constant/caseProperties` and recomputes the Mach-dependent freestream entries — `UInfMag`, the literal `UInf` vector, `kInf`, and `omegaInf` — in `constant/freestreamProperties`. It does not touch the mesh dictionaries, so the clone inherits the source case's refinement setup. Pass `--N 0` for a clean-body case; `rebuild-mesh.sh` then skips the stabilizer STL entirely. Note that the case's `system/snappyHexMeshDict` and `system/surfaceFeatureExtractDict` must agree with `N` — a clone with `--N 0` from `openfoam/arc` still references `stabilizers.stl`, so clone from `openfoam/arc_no_stab` instead when you want a bare body.
 
-```bash
-python3 scripts/sweep.py --force
-```
+`rebuild-mesh.sh` reads geometry from `constant/caseProperties`, exports `fuselage.stl` (plus `stabilizers.stl` when N > 0) via OpenSCAD's `EXPORT` selector, runs parallel `snappyHexMesh -overwrite`, reconstructs the final snapped mesh into `constant/polyMesh`, then decomposes that final mesh for the solver. Both scripts default to `NP=12`, matching `numberOfSubdomains` in the tracked cases; override with `NP=<n>`. `MAX_CELLS=11000000` is enforced by default after `checkMesh`; set `MAX_CELLS=0` to disable the guard for exploratory runs. `run-simulation.sh` cleans prior run outputs from the case while preserving the mesh and `0/` fields. HiSA has no `-dry-run`, so `run-simulation.sh --dry-run` validates the decomposed mesh and patches with parallel `checkMesh`, tee'd to `log.checkMesh.dryRun`.
 
-Each generated case stores Mach in `constant/caseProperties`; `scripts/create_case.py` updates both `UInfMag` and the literal `UInf` vector in `constant/freestreamProperties`.
+Both tracked cases set `addLayers true` with `nSurfaceLayers 15`, so the mesh sits close to the `MAX_CELLS` guard. Review y+ before trusting wall-sensitive quantities.
 
 ## Validation Expectations
 
@@ -193,4 +188,5 @@ Before trusting coefficients from a case, require:
 - `./run-simulation.sh --dry-run <case>` exits cleanly.
 - `postProcessing/forces` contains non-empty force and moment logs.
 - `results/<case>/coefficients.csv` is non-empty.
-- Wall-function y+ is reviewed on representative cases before using wall-sensitive quantities; the default sweep mesh does not add boundary-layer cells.
+- Wall-function y+ is reviewed on representative cases before using wall-sensitive quantities.
+- For the clean-body baseline (`openfoam/arc_no_stab`), `Cy`, `Cz`, and all three moments should be ≈ 0 by axisymmetry at 0° AoA — a useful check on the mesh and the force integration before trusting the finned cases.

@@ -3,19 +3,18 @@ set -euo pipefail
 
 # Rebuild mesh artifacts for an existing case directory.
 #
-# Usage: ./rebuild-mesh.sh [--geometry path/to/model.scad] [case-dir]
+# Usage: ./rebuild-mesh.sh [--geometry path/to/geometry.scad] <case-dir>
 #
-# If the case directory does not exist, it is initialized from openfoam/template.
-# Geometry parameters are read from constant/caseProperties.
+# Geometry parameters are read from constant/caseProperties. The case must
+# already exist; create one with scripts/create_case.py.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # ── configuration (env overridable) ──────────────────────────────────────────
-CASE_ARG=openfoam/cases/test
+CASE_ARG=openfoam/arc
 NP=${NP:-12}
 MAX_CELLS=${MAX_CELLS:-11000000}   # 11M cell budget; MAX_CELLS=0 disables the guard
-TEMPLATE="$ROOT/openfoam/template"
-GEOMETRY=${GEOMETRY:-"$ROOT/geometry/model.scad"}
+GEOMETRY=${GEOMETRY:-"$ROOT/geometry/arc_stabilizers.scad"}
 
 # Tools resolved during validation.
 OPENSCAD=
@@ -91,7 +90,7 @@ parse_args() {
                 shift
                 ;;
             -h|--help)
-                sed -n '1,8p' "$0"
+                sed -n '1,9p' "$0"
                 exit 0
                 ;;
             -*)
@@ -120,7 +119,6 @@ resolve_paths() {
 validate_config() {
     local exe
 
-    [ -d "$TEMPLATE" ] || usage_error "missing template directory: $TEMPLATE"
     [ -f "$GEOMETRY" ] || usage_error "missing geometry file: $GEOMETRY"
 
     case "$NP" in
@@ -139,24 +137,20 @@ validate_config() {
 }
 
 init_case() {
-    if [ ! -d "$CASE" ]; then
-        mkdir -p "$(dirname "$CASE")"
-        cp -R "$TEMPLATE" "$CASE"
-    fi
+    [ -d "$CASE" ] || usage_error "missing case directory: $CASE; create it with scripts/create_case.py"
 
     local params="$CASE/constant/caseProperties"
     [ -f "$params" ] || usage_error "missing $params; create the case with scripts/create_case.py"
 
     D=$(foam_scalar "$params" D 80.0)
-    N=$(foam_scalar "$params" N 2)
-    XI=$(foam_scalar "$params" xi 45)
-    LD=$(foam_scalar "$params" LD 1.0)
-    TD=$(foam_scalar "$params" TD 0.02)
+    N=$(foam_scalar "$params" N 4)
+    XI=$(foam_scalar "$params" xi 90)
+    L=$(foam_scalar "$params" L 140.0)
 
     echo "case      : $CASE"
     echo "geometry  : $GEOMETRY"
     echo "openscad  : $OPENSCAD"
-    echo "params    : D=${D}mm N=$N xi=$XI LD=$LD TD=$TD"
+    echo "params    : D=${D}mm N=$N xi=$XI L=${L}mm"
     echo "parallel  : $NP ranks"
 }
 
@@ -182,26 +176,41 @@ clean_artifacts() {
     done
 }
 
-generate_surface() {
-    mkdir -p constant/triSurface
+# Export one EXPORT part of the geometry to constant/triSurface/<part>.stl and
+# repair it if it is not already watertight.
+#
+# surfaceClean strips duplicate-vertex "illegal" triangles from a non-closed
+# surface. But on an already-clean closed surface its collapseBase pass mangles
+# benign sub-micron CGAL union slivers (and aborts on the long cylinder slivers
+# arc_stabilizers.scad produces). So only clean when surfaceCheck reports the
+# STL is not already watertight.
+export_part() {
+    local part=$1
+    local stl="constant/triSurface/$part.stl"
+    local log="log.surfaceCheck.$part"
+
     "$OPENSCAD" \
-        -o constant/triSurface/body.stl \
-        -D "D=$D; N=$N; xi=$XI; LD=$LD; TD=$TD;" \
+        -o "$stl" \
+        -D "D=$D; N=$N; xi=$XI; L=$L; EXPORT=\"$part\";" \
         "$GEOMETRY"
 
-    # surfaceClean repairs non-watertight STLs: model.scad emits a non-closed
-    # surface with duplicate-vertex "illegal" triangles that it strips. But on an
-    # already-clean closed surface its collapseBase pass mangles benign sub-micron
-    # CGAL union slivers (and aborts on the long cylinder slivers
-    # arc_stabilizers.scad produces). So only clean when surfaceCheck reports the
-    # STL is not already watertight.
-    surfaceCheck constant/triSurface/body.stl 2>&1 | tee log.surfaceCheck >/dev/null || true
-    if grep -q "Surface has no illegal triangles" log.surfaceCheck \
-       && grep -q "Surface is closed" log.surfaceCheck; then
-        echo "surfaceClean: skipped (body.stl already closed with no illegal triangles)"
+    surfaceCheck "$stl" 2>&1 | tee "$log" >/dev/null || true
+    if grep -q "Surface has no illegal triangles" "$log" \
+       && grep -q "Surface is closed" "$log"; then
+        echo "surfaceClean: skipped ($part.stl already closed with no illegal triangles)"
     else
-        echo "surfaceClean: repairing body.stl"
-        surfaceClean constant/triSurface/body.stl 5e-05 1e-4 constant/triSurface/body.stl
+        echo "surfaceClean: repairing $part.stl"
+        surfaceClean "$stl" 5e-05 1e-4 "$stl"
+    fi
+}
+
+generate_surface() {
+    mkdir -p constant/triSurface
+    export_part fuselage
+    if [ "${N%%.*}" -gt 0 ]; then
+        export_part stabilizers
+    else
+        echo "stabilizers: skipped (N=$N, clean-body case)"
     fi
 
     surfaceFeatureExtract
@@ -210,12 +219,12 @@ generate_surface() {
 build_mesh() {
     blockMesh
     decomposePar -force
-    mpirun -np "$NP" snappyHexMesh -parallel 2>&1 | tee log.snappyHexMesh
+    mpirun -np "$NP" snappyHexMesh -parallel -overwrite 2>&1 | tee log.snappyHexMesh
     reconstructParMesh -constant 2>&1 | tee log.reconstructParMesh
     strip_frozen_points_zones
 
-    grep -q "body" constant/polyMesh/boundary || {
-        echo "error: reconstructed constant/polyMesh is missing the body patch" >&2
+    grep -q "fuselage" constant/polyMesh/boundary || {
+        echo "error: reconstructed constant/polyMesh is missing the fuselage patch" >&2
         exit 1
     }
 
@@ -223,8 +232,8 @@ build_mesh() {
     decomposePar -force
     strip_frozen_points_zones
 
-    grep -q "body" processor0/constant/polyMesh/boundary || {
-        echo "error: decomposed mesh is missing the body patch" >&2
+    grep -q "fuselage" processor0/constant/polyMesh/boundary || {
+        echo "error: decomposed mesh is missing the fuselage patch" >&2
         exit 1
     }
 }

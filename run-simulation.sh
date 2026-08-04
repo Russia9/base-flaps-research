@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # ── configuration (env overridable) ──────────────────────────────────────────
-CASE_ARG=openfoam/test
+CASE_ARG=openfoam/arc
 DRY_RUN=0
 NP=${NP:-12}
 DEPENDENCIES="mpirun hisa checkMesh foamListTimes reconstructPar"

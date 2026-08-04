@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Create one OpenFOAM case from the template.
+"""Create one OpenFOAM case by cloning an existing case and retargeting Mach.
 
 Example:
-    python3 scripts/create_case.py --force --case openfoam/test \
-        --N 2 --xi 45 --LD 1.0 --TD 0.02 --Mach 1.5
+    python3 scripts/create_case.py --force --case openfoam/arc_M2p0 \
+        --N 4 --xi 90 --L 140 --Mach 2.0
+
+The source case (--template, default openfoam/arc) supplies the mesh
+dictionaries and boundary conditions; this script rewrites
+constant/caseProperties and the Mach-dependent entries of
+constant/freestreamProperties. Pass --N 0 for the clean-body baseline.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_TEMPLATE = ROOT / "openfoam" / "template"
+DEFAULT_TEMPLATE = ROOT / "openfoam" / "arc"
 
 
 def parse_scalar(text: str, name: str) -> float:
@@ -63,11 +68,11 @@ def write_case_properties(
     diameter_mm: float,
     n_fins: int,
     xi: float,
-    ld: float,
-    td: float,
+    chord_mm: float,
     mach: float,
     gamma: float,
 ) -> None:
+    fin_note = "clean-body baseline: no stabilizers" if n_fins == 0 else f"L/D = {format_number(chord_mm / diameter_mm)}"
     text = f"""/*--------------------------------*- C++ -*----------------------------------*\\
 | =========                 |                                                 |
 | \\\\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
@@ -87,8 +92,7 @@ FoamFile
 D           {format_number(diameter_mm)};   // mm
 N           {n_fins};
 xi          {format_number(xi)};
-LD          {format_number(ld)};
-TD          {format_number(td)};
+L           {format_number(chord_mm)};  // mm, stabilizer chord ({fin_note})
 Mach        {format_number(mach)};
 gamma       {format_number(gamma)};
 
@@ -109,7 +113,7 @@ def update_freestream(case: Path, mach: float, gamma: float) -> float:
     u_mag = mach * math.sqrt(gamma * r_gas * t_inf)
 
     # Freestream turbulence held at constant intensity and eddy-viscosity ratio
-    # across the sweep, so k and omega scale with Mach. Sutherland viscosity is
+    # across cases, so k and omega scale with Mach. Sutherland viscosity is
     # read from thermophysicalProperties to keep a single source of truth.
     thermo = (case / "constant" / "thermophysicalProperties").read_text()
     a_s = parse_scalar(thermo, "As")
@@ -135,8 +139,7 @@ def create_case(
     diameter_mm: float,
     n_fins: int,
     xi: float,
-    ld: float,
-    td: float,
+    chord_mm: float,
     mach: float,
     gamma: float,
     force: bool,
@@ -146,7 +149,11 @@ def create_case(
     openfoam_root = (ROOT / "openfoam").resolve()
 
     if case == template:
-        raise ValueError("Refusing to overwrite the template case")
+        raise ValueError("Refusing to overwrite the source case")
+    if n_fins < 0:
+        raise ValueError("N must be >= 0")
+    if n_fins > 0 and not 0 < xi < 360:
+        raise ValueError("xi must be in (0, 360) degrees")
 
     if case.exists():
         if not force:
@@ -163,8 +170,7 @@ def create_case(
         diameter_mm=diameter_mm,
         n_fins=n_fins,
         xi=xi,
-        ld=ld,
-        td=td,
+        chord_mm=chord_mm,
         mach=mach,
         gamma=gamma,
     )
@@ -176,13 +182,12 @@ def create_case(
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--case", required=True, type=Path, help="case directory to create")
-    p.add_argument("--template", type=Path, default=DEFAULT_TEMPLATE, help="template case directory")
+    p.add_argument("--template", type=Path, default=DEFAULT_TEMPLATE, help="source case directory to clone")
     p.add_argument("--force", action="store_true", help="replace an existing case under openfoam/")
     p.add_argument("--D", type=float, default=80.0, help="body diameter in mm")
-    p.add_argument("--N", type=int, choices=[1, 2, 3, 4], required=True, help="number of fins")
-    p.add_argument("--xi", type=float, choices=[30.0, 45.0, 90.0], required=True, help="fin arc angle in degrees")
-    p.add_argument("--LD", type=float, choices=[0.5, 1.0, 1.5], required=True, help="fin length divided by D")
-    p.add_argument("--TD", type=float, default=0.02, help="fin thickness divided by D")
+    p.add_argument("--N", type=int, required=True, help="number of fins; 0 for the clean-body baseline")
+    p.add_argument("--xi", type=float, default=90.0, help="fin arc angle in degrees")
+    p.add_argument("--L", type=float, default=140.0, help="fin chord in mm")
     p.add_argument("--Mach", type=float, required=True, help="freestream Mach number")
     p.add_argument("--gamma", type=float, default=1.4, help="specific heat ratio for UInf calculation")
     return p
@@ -197,8 +202,7 @@ def main(argv: list[str]) -> int:
             diameter_mm=args.D,
             n_fins=args.N,
             xi=args.xi,
-            ld=args.LD,
-            td=args.TD,
+            chord_mm=args.L,
             mach=args.Mach,
             gamma=args.gamma,
             force=args.force,
@@ -208,7 +212,7 @@ def main(argv: list[str]) -> int:
         return 1
 
     print(f"case      : {args.case}")
-    print(f"geometry  : D={format_number(args.D)}mm N={args.N} xi={format_number(args.xi)} LD={format_number(args.LD)} TD={format_number(args.TD)}")
+    print(f"geometry  : D={format_number(args.D)}mm N={args.N} xi={format_number(args.xi)} L={format_number(args.L)}mm")
     print(f"freestream: Mach={format_number(args.Mach)} UInfMag={format_number(u_mag)} m/s")
     return 0
 

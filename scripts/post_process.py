@@ -53,7 +53,7 @@ def parse_force_file(path: Path) -> list[dict[str, float]]:
     Each non-comment line is whitespace-separated columns (no parentheses):
         <time>  total(x y z)  pressure(x y z)  viscous(x y z)  [porous(x y z)]
     where total = pressure + viscous (+ porous). We keep the reported total
-    and the pressure/viscous split; the template never enables porosity.
+    and the pressure/viscous split; the cases never enable porosity.
     """
     rows: list[dict[str, float]] = []
     for raw in path.read_text().splitlines():
