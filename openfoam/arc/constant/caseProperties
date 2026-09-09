@@ -16,7 +16,7 @@ FoamFile
 
 D           80;   // mm
 N           4;
-xi          90;
+xi          79.61;  // F1: b/2 = 2.64 in developed at R1
 L           140;  // mm, stabilizer chord (L/D = 1.75)
 Mach        1.5;
 gamma       1.4;

@@ -16,7 +16,7 @@ FoamFile
 
 D           80;   // mm
 N           0;    // clean-body baseline: no stabilizers
-xi          90;
+xi          79.61;  // unused when N = 0
 L           140;  // mm, stabilizer chord (unused when N = 0)
 Mach        1.5;
 gamma       1.4;

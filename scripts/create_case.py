@@ -3,7 +3,7 @@
 
 Example:
     python3 scripts/create_case.py --force --case openfoam/arc_M2p0 \
-        --N 4 --xi 90 --L 140 --Mach 2.0
+        --N 4 --xi 79.61 --L 140 --Mach 2.0
 
 The source case (--template, default openfoam/arc) supplies the mesh
 dictionaries and boundary conditions; this script rewrites
@@ -186,7 +186,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="replace an existing case under openfoam/")
     p.add_argument("--D", type=float, default=80.0, help="body diameter in mm")
     p.add_argument("--N", type=int, required=True, help="number of fins; 0 for the clean-body baseline")
-    p.add_argument("--xi", type=float, default=90.0, help="fin arc angle in degrees")
+    p.add_argument("--xi", type=float, default=79.61, help="fin arc angle in degrees")
     p.add_argument("--L", type=float, default=140.0, help="fin chord in mm")
     p.add_argument("--Mach", type=float, required=True, help="freestream Mach number")
     p.add_argument("--gamma", type=float, default=1.4, help="specific heat ratio for UInf calculation")
