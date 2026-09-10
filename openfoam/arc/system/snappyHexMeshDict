@@ -64,29 +64,29 @@ geometry
     finJunctionPosY
     {
         type searchableBox;
-        min (0.65  0.35 -0.02);
-        max (0.67  0.50  0.02);
+        min (0.65  0.035 -0.02);
+        max (0.67  0.050  0.02);
     }
 
     finJunctionPosZ
     {
         type searchableBox;
-        min (0.65 -0.02  0.35);
-        max (0.67  0.02  0.50);
+        min (0.65 -0.02  0.035);
+        max (0.67  0.02  0.050);
     }
 
     finJunctionNegY
     {
         type searchableBox;
-        min (0.65 -0.50 -0.02);
-        max (0.67 -0.35  0.02);
+        min (0.65 -0.050 -0.02);
+        max (0.67 -0.035  0.02);
     }
 
     finJunctionNegZ
     {
         type searchableBox;
-        min (0.65 -0.02 -0.50);
-        max (0.67  0.02 -0.35);
+        min (0.65 -0.02 -0.050);
+        max (0.67  0.02 -0.035);
     }
 };
 
@@ -197,11 +197,11 @@ addLayersControls
     relativeSizes false;
     layers
     {
-        fuselage    { nSurfaceLayers 15; }
-        stabilizers { nSurfaceLayers 15; }
+        fuselage    { nSurfaceLayers 13; }
+        stabilizers { nSurfaceLayers 13; }
     }
-    expansionRatio           1.5;
-    firstLayerThickness      7.1e-7;
+    expansionRatio           1.4;
+    firstLayerThickness      3e-6;
 
     maxFaceThicknessRatio    10.0;
     minThickness             1e-9;
@@ -209,7 +209,7 @@ addLayersControls
     nSmoothNormals           3;
     nSmoothSurfaceNormals    3;
     nGrow                    0;
-    nBufferCellsNoExtrude    1;
+    nBufferCellsNoExtrude    -1;
     featureAngle             160;
     slipFeatureAngle         75;
     nRelaxIter               8;
