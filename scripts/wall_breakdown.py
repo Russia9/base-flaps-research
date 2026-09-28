@@ -8,8 +8,8 @@ Samples p and wallShearStress on the wall patches with a one-off
 `postProcess` (OpenFOAM env must be sourced), then integrates per face:
 - axial force split into nose / cylinder / fins / base, so the report's
   C_Ab (base disk) and C_Af = C_A - C_Ab can be compared directly;
-- fin rolling moment Mx by 10 mm chord bin and by surface (concave side,
-  convex side, LE/TE bevels);
+- fin rolling moment Mx by 10 mm chord bin and by surface (concave or
+  convex side, with the LE/TE bevels split out as *_LE / *_TE);
 - base-disk Cp by radius.
 
 Writes results/<case-name>/wall_breakdown.csv. Same normalisation as
@@ -162,10 +162,10 @@ def main() -> int:
         bow = math.copysign(1.0, fin_lateral_sum[k])
         # Fluid-side normal is -s. The concave side faces away from the bow.
         n_lat = -(-az * s[1] + ay * s[2]) / area * bow
-        if abs(s[0]) > 0.5 * area:
-            side = "LE_bevel" if -s[0] < 0 else "TE_bevel"
-        else:
-            side = "convex" if n_lat > 0 else "concave"
+        side = "convex" if n_lat > 0 else "concave"
+        # The 45 deg edge wedges tilt the normal sin(22.5 deg) = 0.38 off the flat surface.
+        if abs(s[0]) > 0.2 * area:
+            side += "_LE" if -s[0] < 0 else "_TE"
         chord = f"{int((c[0] - fin_le) / CHORD_BIN) * CHORD_BIN * 1000:.0f}"
         add(("fin_chord", chord, side), f_p, f_v, c, area)
 
@@ -178,7 +178,8 @@ def main() -> int:
         fh.write("group,key,side,Cx_p,Cx_v,Mx_p,Mx_v,area_over_S,Cp_mean\n")
         for (group, key, side), (fp, fv, mp, mv, a) in sorted(
                 rows.items(), key=lambda kv: (kv[0][0], float(kv[0][1]) if kv[0][1][0].isdigit() else 0, kv[0][1], kv[0][2])):
-            cp = fp / a / q if group == "base_r" else float("nan")
+            # base-disk normal points upstream into the body, so Cp = -F_x / (q A)
+            cp = -fp / a / q if group == "base_r" else float("nan")
             fh.write(f"{group},{key},{side},{fp / q_s:.6f},{fv / q_s:.6f},"
                      f"{mp / q_s_d:.6f},{mv / q_s_d:.6f},{a / S_REF:.6f},{cp:.4f}\n")
 
