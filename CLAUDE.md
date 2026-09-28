@@ -33,9 +33,12 @@ Validation experiments follow `EXPERIMENTS.md`. The short version:
 - Each step changes **one thing** relative to the current best case.
 - New cases are created **only** with `scripts/create_case.py --template <baseline>`,
   then built with `rebuild-mesh.sh` and solved with `run-simulation.sh`.
-- Each step gets two commits **on the CFD server**. The setup commit holds the
-  case dictionaries and the log entry, and is made before meshing. The result
-  commit holds `results/<case>/` and the outcome.
+- Each step gets two commits, made **locally and pushed to `origin`**. The
+  setup commit holds the case dictionaries and the log entry, and is made
+  before meshing. The result commit holds `results/<case>/`, copied back from
+  the server, and the outcome. The server never commits. It syncs with
+  `git fetch && git reset --hard origin/master`, which keeps its untracked
+  cases.
 - `.gitignore` tracks every case's `0/`, `system/`, `constant/*Properties` and
   `case.foam`, so each experiment can be reproduced from git history. Meshes,
   `processor*/`, time directories, logs and `postProcessing/` stay untracked.

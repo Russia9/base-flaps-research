@@ -21,7 +21,14 @@ plus `results/<case>/wall_breakdown.csv` for the base/forebody split.
    Then edit dictionaries, run `./rebuild-mesh.sh openfoam/<new>` and
    `./run-simulation.sh openfoam/<new>`. No hand-copied case directories and no
    hand-edited meshes.
-3. **Everything is committed on the CFD server**, in two commits per step:
+3. **Everything is committed locally and pushed to `origin`**, in two commits
+   per step. The CFD server never commits. It only syncs with
+   `git fetch && git reset --hard origin/master`. That is safe because the
+   server holds no edits to tracked files, and result files copied back to it
+   are identical. It also keeps untracked cases, meshes and runs. New case
+   dictionaries are created locally with `create_case.py` and reach the
+   server by that sync. `results/<case>/` is copied back from the server before
+   the result commit. The two commits are:
    - *Setup:* `test(sNN): <what changes>`, containing the new case's
      dictionaries (tracked by `.gitignore`: `0/`, `system/`,
      `constant/*Properties`, `case.foam`) and this log's entry with the
