@@ -16,3 +16,5 @@ openfoam/*/*
 !openfoam/*/case.foam
 openfoam/*/constant/*
 !openfoam/*/constant/*Properties
+
+__pycache__/
