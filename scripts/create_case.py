@@ -62,6 +62,22 @@ def is_relative_to(path: Path, parent: Path) -> bool:
     return True
 
 
+def case_dictionaries_only(template: Path):
+    """copytree ignore filter: keep 0/, system/ and constant/*Properties.
+
+    A solved source case also holds the mesh, processor*/ and time
+    directories (gigabytes); rebuild-mesh.sh regenerates all of that.
+    """
+    def ignore(directory: str, names: list[str]) -> list[str]:
+        rel = Path(directory).resolve().relative_to(template)
+        if rel == Path("."):
+            return [n for n in names if n not in ("0", "system", "constant")]
+        if rel == Path("constant"):
+            return [n for n in names if not n.endswith("Properties")]
+        return [n for n in names if n == ".DS_Store"]
+    return ignore
+
+
 def write_case_properties(
     case: Path,
     *,
@@ -163,7 +179,7 @@ def create_case(
         shutil.rmtree(case)
 
     case.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(template, case)
+    shutil.copytree(template, case, ignore=case_dictionaries_only(template))
 
     write_case_properties(
         case,
