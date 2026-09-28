@@ -4,8 +4,13 @@
 # MacOS files
 **/.DS_Store
 
-openfoam/*
-!openfoam/arc/
-!openfoam/arc/**
-!openfoam/arc_no_stab/
-!openfoam/arc_no_stab/**
+# Cases: track only the dictionaries (0/, system/, constant/*Properties,
+# case.foam) so every experiment case is reproducible from git history.
+# Meshes, processor*/, time directories, logs and postProcessing/ stay local.
+openfoam/*/*
+!openfoam/*/0/
+!openfoam/*/system/
+!openfoam/*/constant/
+!openfoam/*/case.foam
+openfoam/*/constant/*
+!openfoam/*/constant/*Properties
