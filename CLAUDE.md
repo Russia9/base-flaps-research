@@ -15,6 +15,59 @@ sweep: `openfoam/arc` (N = 4, ξ = 79.61°, L = 140 mm) and `openfoam/arc_no_sta
 The 108-case `(N, ξ, L/D, Ma)` factorial is the eventual target but no script
 drives it; `scripts/sweep.py` and `openfoam/template/` were removed.
 
+The active work is **validating the induced roll at Ma 1.6** against the report
+(see "Validation target" below), using untracked `openfoam/arc_M1.6_*` clones
+on the CFD server. The tracked templates lag behind those clones:
+- `openfoam/arc` still has `nBufferCellsNoExtrude -1`, which blows up HiSA at
+  the base-rim corner at Ma 1.6. The working value is `0`.
+- `openfoam/arc` has none of the per-fin refinement boxes (`finTight*`,
+  `finWide*`, `baseWake`) that produced the best roll so far
+  (`arc_M1.6_finwake`, 13.3 M cells).
+
+Clone from the server case, not from the tracked template, when continuing that
+work.
+
+## Experiment tracking (policy)
+
+Validation experiments follow `EXPERIMENTS.md`. The short version:
+- Each step changes **one thing** relative to the current best case.
+- New cases are created **only** with `scripts/create_case.py --template <baseline>`,
+  then built with `rebuild-mesh.sh` and solved with `run-simulation.sh`.
+- Each step gets two commits **on the CFD server**. The setup commit holds the
+  case dictionaries and the log entry, and is made before meshing. The result
+  commit holds `results/<case>/` and the outcome.
+- `.gitignore` tracks every case's `0/`, `system/`, `constant/*Properties` and
+  `case.foam`, so each experiment can be reproduced from git history. Meshes,
+  `processor*/`, time directories, logs and `postProcessing/` stay untracked.
+- `create_case.py` copies only those dictionaries, so cloning a solved
+  multi-GB case is cheap.
+- Do not start meshing or solving a step until the user has approved it.
+
+`scripts/wall_breakdown.py <case>` splits the wall force into nose, cylinder,
+fins and base (C_Af, C_Ab), roll by fin chord and side, and base Cp by
+radius. It writes `results/<case>/wall_breakdown.csv` and needs the OpenFOAM
+environment for its `postProcess` sampling pass.
+
+## Validation target
+
+Report B1F1 at Ma 1.6, α = 0, φ = 0 gives `C_ℓ = −0.016`, with
+`S_ref = πd²/4` and `L_ref = d`. That is the same normalisation as
+`post_process.py`, so the target is **`Mx = +0.016`** in our sign convention
+(see the sign note below). Acceptance is at least 80 % of that,
+`Mx ≥ +0.0128`. A second facility (MDAC S-256, fin-only roll) reads about
+−0.010, so the experimental spread is itself large.
+
+Axial force targets from the same report (circle series, Ma 1.6, α = 0):
+`C_Af ≈ 0.40` (forebody, `C_A − C_Ab`) and `C_Ab ≈ 0.10` (base, over the full
+base area πd²/4). `post_process.py` gives only the total `Cx`. Splitting off
+the base disk (fuselage faces at x = 0.8 m with the normal along x) needs a
+wall-field sample. The best case so far gives C_Af 0.454 and C_Ab 0.202, so the
+base is the main axial-force discrepancy.
+
+The roll is a small residual of two large opposing chordwise contributions
+(front chord ≈ +0.040, mid chord ≈ −0.046). Small errors in either one swing
+the result by tens of percent.
+
 ## Reference configuration — report body B1 + fin F1
 
 Every dimension in `geometry/arc_stabilizers.scad` traces to a wrap-around-fin
@@ -99,7 +152,12 @@ mesh/run artifacts. The mesh runs `mpirun -np 12` by default; override with
 `NP=<n>`.
 `MAX_CELLS=11000000` is enforced after `checkMesh` by default; set `MAX_CELLS=0`
 only for exploratory runs — both tracked cases use `addLayers true` with
-`nSurfaceLayers 15`, so they sit close to the guard.
+`nSurfaceLayers 13` (first layer 3 µm, ratio 1.4, wall-resolved rather than
+wall functions), so they sit close to the guard. The fin-refined server cases
+exceed 11 M and are run with the guard raised. The hard limit is the server's
+memory: HiSA on 12 ranks survives 13.3 M cells and is OOM-killed at 14.6 M.
+`checkMesh` has never reported `Mesh OK` for this mesh family, because of
+aspect-ratio and skewness flags at the fin tips.
 
 `create_case.py` creates a *new* case by cloning an existing one
 (`--template`, default `openfoam/arc`) and rewriting `constant/caseProperties`
@@ -240,8 +298,9 @@ if `D` ever changes.
 - `run-simulation.sh` clears `log.hisa`, `log.reconstructPar`,
   `log.checkMesh.dryRun`, and `postProcessing/` before each run, while
   preserving the mesh (`processor*/constant/`) and `0/` initial fields.
-- Anything under `openfoam/` other than `openfoam/arc/` and
-  `openfoam/arc_no_stab/` is gitignored (see `.gitignore`).
+- Under `openfoam/`, only case dictionaries are tracked (`0/`, `system/`,
+  `constant/*Properties`, `case.foam`). Everything generated is gitignored
+  (see `.gitignore` and "Experiment tracking").
 
 ## ParaView visualization
 

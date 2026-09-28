@@ -63,7 +63,7 @@ to 90°. The arc centre is tied to ξ/2, so changing `xi` moves it automatically
 
 ## Parameter Space
 
-The full 108-case factorial sweep (N × ξ × L/D × Ma) is the eventual target but is not currently driven by any script. Work is presently on two hand-tuned cases at Ma 1.5:
+The full 108-case factorial sweep (N × ξ × L/D × Ma) is the eventual target but is not currently driven by any script. Work is presently on two hand-tuned tracked cases (Ma 1.5 as committed), with validation of the induced roll running on Ma 1.6 clones of `openfoam/arc` (see [Validation Expectations](#validation-expectations)):
 
 | Case | N | ξ | L | Purpose |
 |---|---|---|---|---|
@@ -76,7 +76,7 @@ Mach variants are produced with `scripts/create_case.py --template openfoam/arc 
 
 | Parameter | Value |
 |---|---|
-| Mach number | 1.5 / 2.0 / 2.5 |
+| Mach number | 1.5 / 2.0 / 2.5 (sweep); 1.6 (validation against the report) |
 | Angle of attack | 0° |
 | Regime | Supersonic only |
 
@@ -163,14 +163,15 @@ base-flaps-research/
 │   │       ├── blockMeshDict, snappyHexMeshDict, decomposeParDict, …
 │   └── arc_no_stab/            # Clean-body baseline, N = 0 (arc minus the stabilizers)
 ├── scripts/
-│   ├── create_case.py          # clone a case, retarget Mach + geometry parameters
+│   ├── create_case.py          # clone a case's dictionaries, retarget Mach + geometry parameters
+│   ├── wall_breakdown.py       # wall force split: nose/cylinder/fins/base, fin roll by chord
 │   └── post_process.py         # forces.dat → results/<case>/coefficients.csv (Cx..Mz)
 ├── rebuild-mesh.sh             # OpenSCAD → STL → blockMesh + parallel snappyHexMesh -overwrite + decompose
 ├── run-simulation.sh           # dry-run/solve → reconstructPar → post_process
 └── results/                    # Per-case coefficient CSVs (written by post_process.py)
 ```
 
-Anything under `openfoam/` other than `openfoam/arc/` and `openfoam/arc_no_stab/` is gitignored, so generated Mach variants stay untracked.
+Under `openfoam/`, git tracks only each case's dictionaries (`0/`, `system/`, `constant/*Properties`, `case.foam`); meshes, processor directories, time directories and logs are ignored. Validation experiments are created from a baseline case with `create_case.py`, committed one step at a time, and logged in [`EXPERIMENTS.md`](EXPERIMENTS.md).
 
 ## Quickstart
 
@@ -199,16 +200,17 @@ python3 scripts/create_case.py --force --case openfoam/arc_M2p0 --N 4 --xi 79.61
 
 `rebuild-mesh.sh` reads geometry from `constant/caseProperties`, exports `fuselage.stl` (plus `stabilizers.stl` when N > 0) via OpenSCAD's `EXPORT` selector, runs parallel `snappyHexMesh -overwrite`, reconstructs the final snapped mesh into `constant/polyMesh`, then decomposes that final mesh for the solver. Both scripts default to `NP=12`, matching `numberOfSubdomains` in the tracked cases; override with `NP=<n>`. `MAX_CELLS=11000000` is enforced by default after `checkMesh`; set `MAX_CELLS=0` to disable the guard for exploratory runs. `run-simulation.sh` cleans prior run outputs from the case while preserving the mesh and `0/` fields. HiSA has no `-dry-run`, so `run-simulation.sh --dry-run` validates the decomposed mesh and patches with parallel `checkMesh`, tee'd to `log.checkMesh.dryRun`.
 
-Both tracked cases set `addLayers true` with `nSurfaceLayers 15`, so the mesh sits close to the `MAX_CELLS` guard. Review y+ before trusting wall-sensitive quantities.
+Both tracked cases set `addLayers true` with `nSurfaceLayers 13` (first layer 3 µm, expansion ratio 1.4), so the mesh sits close to the `MAX_CELLS` guard. The fin-refined validation cases run at about 13 M cells with the guard raised. The practical ceiling is solver memory: roughly 13.3 M cells on a 62 GB, 12-rank machine. Review y+ before trusting wall-sensitive quantities.
 
 ## Validation Expectations
 
 Before trusting coefficients from a case, require:
 
-- `checkMesh -constant -noZero` reports `Mesh OK`.
+- `checkMesh -constant -noZero` reports `Mesh OK`. The current fin meshes still fail this on aspect-ratio and skewness flags at the fin tips. That is a known open issue, not a pass.
 - `./run-simulation.sh --dry-run <case>` exits cleanly.
 - `postProcessing/forces` contains non-empty force and moment logs.
 - `results/<case>/coefficients.csv` is non-empty.
-- Wall-function y+ is reviewed on representative cases before using wall-sensitive quantities.
+- y+ is reviewed on representative cases before using wall-sensitive quantities. The layers are designed for wall-resolved y+ < 1, not wall functions.
+- **Reference target:** report B1F1 at Ma 1.6, α = 0 gives C_ℓ = −0.016 (S_ref = πd²/4, L_ref = d), i.e. `Mx = +0.016` here. Acceptance is at least 80 % (`Mx ≥ +0.0128`). A second facility reads about −0.010. The same report gives axial force at Ma 1.6 as C_Af ≈ 0.40 (forebody) and C_Ab ≈ 0.10 (base, full base area). Compare the base-disk and forebody shares separately, not just the total `Cx`.
 - For the clean-body baseline (`openfoam/arc_no_stab`), `Cy`, `Cz`, and all three moments should be ≈ 0 by axisymmetry at 0° AoA — a useful check on the mesh and the force integration before trusting the finned cases. Use the baseline, not a finned case, for this check: a finned case is *expected* to carry non-zero `Mx`.
 - Geometry stage only (no OpenFOAM): `openscad -o /tmp/chk.stl -D 'D=80;N=4;xi=79.61;L=140;EXPORT="";' geometry/arc_stabilizers.scad` must report `3D object (manifold)` and `Status: NoError`.
