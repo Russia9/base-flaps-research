@@ -86,15 +86,30 @@ concave and convex terms:
   wake recompression (x ≈ 1.0–1.05), so it cannot reach the fins or the base
   recirculation. A larger domain is not expected to change Mx or C_Ab.
 
-### s01: larger domain (supervisor's suggestion)
-*planned*: farfield radius 0.6 → 1.2 m and outlet 5.6 → 3.2 m, with near-body
-cells kept identical.
+### s01: larger domain (supervisor's suggestion), deferred to the end
+Planned: farfield radius 0.6 → 1.2 m and outlet 5.6 → 3.2 m, with near-body
+cells kept identical. s00 predicts no effect (reflections reach the axis only
+downstream of the wake recompression), so it runs last as a confirmation.
+
+### s02: coarser fuselage surface upstream of x = 0.6 m (enabler)
+Case `arc_M1.6_s02_fuscoarse`, baseline `arc_M1.6_finwake`. One change in
+`snappyHexMeshDict`: `fuselage` surface level (5 6) → (4 5), plus an
+`aftBodySleeve` cylinder (x 0.60–0.81, r ≤ 50 mm) at level 5, so the fin
+region, base rim and base disk keep their old surface level.
+
+Hypothesis: neutral. `Mx` and C_Ab stay within 2 % while about 3 M fuselage
+layer cells are freed, making room for the base refinement (s03). This is
+supported by s00: `fin6` coarsened the whole fuselage and its LE and
+flat-surface roll did not move.
+Pass: |ΔMx| ≤ 2 %, |ΔC_Ab| ≤ 2 %; then s02 becomes the baseline.
+
+Result: *pending*
 
 ### Planned
-- s02: base-region refinement (`aftBaseCylinder` 3 → 4, `baseWake` 4 → 5)
-- s03: fin-region cell-size ladder (fin boxes one level coarser), then Richardson extrapolation
-- s04: less dissipative reconstruction limiter (restart from baseline)
-- s05: coarser fuselage surface upstream of x ≈ 0.6 m (must be neutral; frees cells)
+- s03: base-region refinement (`aftBaseCylinder` 3 → 4, `baseWake` 4 → 5), on the s02 budget
+- s04: fin-region cell-size ladder (fin boxes one level coarser), then Richardson extrapolation
+- s05: less dissipative reconstruction limiter (restart from baseline)
 - s06: fin layer handover (16 layers, last layer ≈ 0.47 mm)
 - s07: directional y/z refinement in a fin-following sleeve
-- s08: fin feature edges at level 7
+- s08: fin TE/LE feature edges at level 7
+- s09: s01 (larger domain) as a confirmation
