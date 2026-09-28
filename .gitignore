@@ -7,6 +7,8 @@
 # Cases: track only the dictionaries (0/, system/, constant/*Properties,
 # case.foam) so every experiment case is reproducible from git history.
 # Meshes, processor*/, time directories, logs and postProcessing/ stay local.
+openfoam/*
+!openfoam/*/
 openfoam/*/*
 !openfoam/*/0/
 !openfoam/*/system/
