@@ -50,7 +50,34 @@ Hypothesis: none. This step locates the roll deficit and the high base drag
 using `scripts/wall_breakdown.py`, checks the outer boundary for reflected
 waves, and compares fin pressure between `fin6` and `finwake`.
 
-Result: *pending*
+**Result (2026-09-29).** Data: `results/arc_M1.6_{finwake,fin6}/wall_breakdown.csv`.
+`fin6` was sampled at it. 900.
+
+Fin roll (`Mx`) split into three pieces, each a small net of large opposing
+concave and convex terms:
+
+| | finwake | fin6 |
+|---|---|---|
+| LE bevels (concave + convex) | +0.1275 − 0.1135 = **+0.0140** | +0.0135 |
+| flat surfaces | −0.0806 + 0.0647 = **−0.0159** | −0.0155 |
+| TE bevels | −0.0409 + 0.0515 = **+0.0106** | **+0.0022** |
+| fins total | +0.0086 | +0.0001 |
+
+- **`fin6` is explained by the trailing edge.** Its LE and flat-surface roll
+  are within 4 % of `finwake`. The whole collapse is in the TE bevels, which
+  sit exactly in the base plane inside the base expansion. Earlier, the
+  `finvol` gain also came from the TE. The TE bevel term is the one that swings
+  with the mesh, and not monotonically.
+- **Base:** C_Ab = 0.202 in both cases; the fin-surface mesh doesn't move it.
+  Base Cp goes from −0.156 on the axis to −0.21 at the rim. The target is
+  C_Ab 0.10, i.e. mean Cp −0.10.
+- **Forebody:** C_Af = 0.454 (nose 0.181, cylinder friction 0.060,
+  fins 0.213) against a target of 0.40.
+- **Farfield (p on lines at r = 0.1 to 0.59 m, x up to 3 m):** the nose wave
+  leaves through the farfield at x ≈ 0.62 with +6 % amplitude. An inward
+  reflection would reach r = 0.1 only at x ≈ 1.25. That is downstream of the
+  wake recompression (x ≈ 1.0–1.05), so it cannot reach the fins or the base
+  recirculation. A larger domain is not expected to change Mx or C_Ab.
 
 ### s01: larger domain (supervisor's suggestion)
 *planned*: farfield radius 0.6 → 1.2 m and outlet 5.6 → 3.2 m, with near-body
