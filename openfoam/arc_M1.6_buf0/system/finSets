@@ -1,0 +1,15 @@
+finSets
+{
+    type            sets;
+    libs            (sampling);
+    setFormat       csv;
+    interpolationScheme cell;
+    fields          (p Ma);
+    sets
+    {
+        cross_mid  { type uniform; axis z; start (0.700 0.06233 -0.005); end (0.700 0.06233 0.045); nPoints 1000; }
+        cross_le   { type uniform; axis z; start (0.665 0.06233 -0.005); end (0.665 0.06233 0.045); nPoints 1000; }
+        ax_convex  { type uniform; axis x; start (0.650 0.06233 0.0118); end (0.810 0.06233 0.0118); nPoints 1600; }
+        ax_concave { type uniform; axis x; start (0.650 0.06233 0.0058); end (0.810 0.06233 0.0058); nPoints 1600; }
+    }
+}
