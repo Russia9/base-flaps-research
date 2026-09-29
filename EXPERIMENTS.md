@@ -130,11 +130,32 @@ first time for this mesh family. The solve ran 1000 its.
   That puts a 5 → 4 level jump inside the base recirculation. The asymmetry and
   the TE change cannot be attributed to the forebody change alone.
 
+### s03: less dissipative reconstruction limiter
+Case `arc_M1.6_s03_wmuscl`, baseline `arc_M1.6_finwake`. One change in
+`fvSchemes`: `reconstruct(rho|U|T)` goes from `wVanLeer gradTVD` to
+`wMUSCL gradTVD`. That is HiSA's weighted monotonized-central limiter,
+`max(min(r/cd, (1+r)/2, 1/cd), 0)`, which clips less than van Leer. Same mesh
+dictionaries, so the mesh must reproduce finwake's 13,304,176 cells. It runs
+from scratch for 1000 its, like the baseline. It is not a restart, because
+finwake's Cx is still drifting at it. 1000 and a restart would mix the limiter
+with extra convergence.
+
+Hypothesis: the roll lives in ±0.1 concave/convex terms at the 45° LE/TE
+bevels (s00), where the flow turns 22.5° through a detached LE shock and a TE
+expansion into the base. van Leer's clipping at those extrema smears both. A
+less dissipative limiter should sharpen them and move the LE and TE pieces.
+The direction is not predicted.
+Pass: none. This is a sensitivity test. |ΔMx| > 10 % means the limiter
+matters and the numerics join the list of error sources.
+
+Result: *pending*
+
 ### Planned
-- s03: base-region refinement (`aftBaseCylinder` 3 → 4, `baseWake` 4 → 5), on the s02 budget
-- s04: fin-region cell-size ladder (fin boxes one level coarser), then Richardson extrapolation
-- s05: less dissipative reconstruction limiter (restart from baseline)
-- s06: fin layer handover (16 layers, last layer ≈ 0.47 mm)
-- s07: directional y/z refinement in a fin-following sleeve
-- s08: fin TE/LE feature edges at level 7
-- s09: s01 (larger domain) as a confirmation
+- extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
+- s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
+- downstream trim (outlet 5.6 → 2.4 m, ~−0.4 M cells), then a small base refinement (level-5 disk x 0.80–0.82)
+- fin-region cell-size ladder (fin boxes one level coarser), then Richardson extrapolation
+- fin layer handover (16 layers, last layer ≈ 0.47 mm)
+- directional y/z refinement in a fin-following sleeve
+- fin TE/LE feature edges at level 7
+- s01 (larger domain) as a confirmation
