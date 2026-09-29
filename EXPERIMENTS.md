@@ -103,7 +103,32 @@ supported by s00: `fin6` coarsened the whole fuselage and its LE and
 flat-surface roll did not move.
 Pass: |ΔMx| ≤ 2 %, |ΔC_Ab| ≤ 2 %; then s02 becomes the baseline.
 
-Result: *pending*
+**Result (2026-09-29): FAIL, not neutral. Baseline stays `finwake`.**
+10.24 M cells, 3.06 M fewer than finwake. Fuselage faces went from 446 k to
+198 k, and fin layer coverage is 98 %. `checkMesh` reported **Mesh OK**, the
+first time for this mesh family. The solve ran 1000 its.
+
+| | finwake | s02 | Δ |
+|---|---|---|---|
+| Mx (last 100) | +0.00852 | +0.00588 | −31 % |
+| fin LE / flat / TE | +0.0140 / −0.0159 / +0.0106 | +0.0128 / −0.0149 / +0.0078 | TE −26 % |
+| C_Ab | 0.202 | 0.199 | −1.6 % |
+| C_Af | 0.454 | 0.438 | −3.5 % |
+| friction nose / cylinder | 0.0129 / 0.0602 | 0.0074 / 0.0475 | −43 % / −21 % |
+| Cz, My (should be 0) | 0.0000, 0.0000 | −0.0014, +0.014 | asymmetric |
+
+- **Not converged:** Cx is still drifting (0.614 at it. 500, 0.637 at it. 1000),
+  and My peaked at 0.018 around it. 700. The arm My/Cz ≈ 10 D places the
+  spurious lateral force at the base, so the base wake went asymmetric.
+- **Friction is surface-level sensitive.** Level 4 on the forebody cuts skin
+  friction by 20–40 %, and `fin6` shows the same drop (nose 0.0074, cylinder
+  0.044). The forebody boundary layer is not resolved at level 4, and may not
+  be converged at level 5 either. With a 0.58 mm layer stack, most of it sits
+  in the volume cells.
+- **Confound (my setup error):** `aftBodySleeve` runs to x = 0.81, so it also
+  refined the first 10 mm behind the base from level 4 (`baseWake`) to level 5.
+  That puts a 5 → 4 level jump inside the base recirculation. The asymmetry and
+  the TE change cannot be attributed to the forebody change alone.
 
 ### Planned
 - s03: base-region refinement (`aftBaseCylinder` 3 → 4, `baseWake` 4 → 5), on the s02 budget
