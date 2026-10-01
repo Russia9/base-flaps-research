@@ -183,6 +183,29 @@ Iterating on solver dicts only: edit the case's `system/*` in place — no
 regeneration step is needed, since `rebuild-mesh.sh` preserves dictionaries.
 Geometry changes always require `rebuild-mesh.sh`.
 
+## Structured mesh (in development, bare body only)
+
+A case that has `system/blockMeshParams` takes a separate path in
+`rebuild-mesh.sh`: `scripts/gen_blockmesh.py` → `blockMesh` → `decomposePar`
+→ `checkMesh`, with no OpenSCAD and no snappy. The generator reads `D, N`
+from `caseProperties`, takes the resolution knobs (mm) from
+`blockMeshParams`, and writes `system/blockMeshDict`. That dict is
+**generated**: change the params and rerun, don't edit it. Stage 1 refuses
+`N > 0`. First case: `openfoam/bm_no_stab_M1.6`. This track sits outside
+the sNN log until the finned version is ready.
+
+- The nose is **sharp**, as in the report (21° tip half-angle, so the shock
+  attaches at Ma 1.6). The scad's `R_nose` cap was only there for snappy's
+  layers. The tip is a 2×2 core patch. The apex is an ordinary vertex, so no
+  cell is degenerate.
+- Wall spacing comes from grading: `firstLayer` 3 µm, `nLayers` at
+  `layerRatio`, then `outerRatio`. It applies on the body, on the base disk and
+  radially at the base rim. Wall cells must keep axial and circumferential
+  size ≤ 1000 × `firstLayer`, or checkMesh flags aspect ratio.
+- No surface projection is used. The ogive is split into blocks of at most
+  `ogiveBlock` mm, so blockMesh's edge interpolation stays within about 0.3 µm
+  of the analytic surface.
+
 ## Linting and validation
 
 The Python scripts are **stdlib-only** — no `requirements.txt`, virtualenv, or

@@ -6,7 +6,9 @@ set -euo pipefail
 # Usage: ./rebuild-mesh.sh [--geometry path/to/geometry.scad] <case-dir>
 #
 # Geometry parameters are read from constant/caseProperties. The case must
-# already exist; create one with scripts/create_case.py.
+# already exist; create one with scripts/create_case.py. A case with
+# system/blockMeshParams is meshed fully structured by scripts/gen_blockmesh.py
+# (no OpenSCAD, no snappyHexMesh); otherwise the snappy pipeline runs.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -130,10 +132,15 @@ validate_config() {
         ''|*[!0-9]*) usage_error "MAX_CELLS must be a non-negative integer" ;;
     esac
 
+    if [ -f "$CASE/system/blockMeshParams" ]; then
+        STRUCTURED=1
+        DEPENDENCIES="blockMesh decomposePar checkMesh python3"
+    fi
+
     for exe in $DEPENDENCIES; do
         need_command "$exe"
     done
-    OPENSCAD=$(detect_openscad)
+    [ -n "${STRUCTURED:-}" ] || OPENSCAD=$(detect_openscad)
 }
 
 init_case() {
@@ -148,8 +155,12 @@ init_case() {
     L=$(foam_scalar "$params" L 140.0)
 
     echo "case      : $CASE"
-    echo "geometry  : $GEOMETRY"
-    echo "openscad  : $OPENSCAD"
+    if [ -n "${STRUCTURED:-}" ]; then
+        echo "mesher    : structured (scripts/gen_blockmesh.py)"
+    else
+        echo "geometry  : $GEOMETRY"
+        echo "openscad  : $OPENSCAD"
+    fi
     echo "params    : D=${D}mm N=$N xi=$XI L=${L}mm"
     echo "parallel  : $NP ranks"
 }
@@ -238,6 +249,12 @@ build_mesh() {
     }
 }
 
+build_structured_mesh() {
+    python3 "$ROOT/scripts/gen_blockmesh.py" . 2>&1 | tee log.genBlockMesh
+    blockMesh 2>&1 | tee log.blockMesh
+    decomposePar -force
+}
+
 verify_mesh() {
     local cell_count
 
@@ -270,8 +287,12 @@ main() {
     clean_artifacts
 
     pushd "$CASE" >/dev/null
-    generate_surface
-    build_mesh
+    if [ -n "${STRUCTURED:-}" ]; then
+        build_structured_mesh
+    else
+        generate_surface
+        build_mesh
+    fi
     verify_mesh
     popd >/dev/null
 
