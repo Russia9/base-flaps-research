@@ -1,0 +1,45 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2512                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshParams;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Resolution knobs for scripts/gen_blockmesh.py, which writes
+// system/blockMeshDict. Lengths in mm. Geometry comes from caseProperties.
+
+nTheta        13;      // cells per 45° sector (8 sectors)
+
+firstLayer    0.003;   // first wall cell, 3 µm (as the snappy cases)
+layerRatio    1.2;     // growth inside the wall stack
+nLayers       20;      // cells in the wall stack
+outerRatio    1.1;     // growth everywhere outside the wall stack
+
+tipRadius     0.5;     // half-width of the nose-tip patch
+coreInlet     40;      // core half-width at the inlet
+coreWake      20;      // core half-width behind the base
+
+xInlet        -800;
+xOutlet       5600;
+rFar          600;
+
+hInlet        20;      // axial cell at the inlet
+hOgive        1.0;     // max axial cell on the ogive
+hShoulder     0.5;     // axial cell at the shoulder kink
+hCyl          2.5;     // max axial cell on the cylinder (wall aspect < 1000)
+hWake         50;      // max axial cell in the wake
+hFar          30;      // max radial cell
+hOutletShear  1.0;     // radial cell at r = R on the outlet
+ogiveBlock    5;       // max block length on the ogive (surface accuracy)
+
+
+// ************************************************************************* //
