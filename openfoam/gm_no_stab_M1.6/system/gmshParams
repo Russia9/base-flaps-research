@@ -1,0 +1,35 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2512                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      gmshParams;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Zone layout for scripts/gen_gmsh.py. Lengths in mm. Body geometry comes
+// from constant/caseProperties.
+
+// Domain
+xInlet        -800;
+xOutlet       5600;
+rFar          600;
+
+// Inner zones: cylinder r <= rZone, split along x into nose | body | aft.
+// Everything else is the far zone. Seams: the planes xNoseEnd and xAftStart,
+// and the inner cylinder's boundary (side and both end disks).
+xZoneStart    -40;     // upstream end of the nose zone (tip at x = 0)
+xNoseEnd      40;      // nose | body seam
+xAftStart     620;     // body | aft seam (fins start at x = 660)
+xZoneEnd      1200;    // downstream end of the aft zone (base at x = 800)
+rZone         120;     // inner-zone radius (fin tips reach r = 86.7)
+
+
+// ************************************************************************* //
