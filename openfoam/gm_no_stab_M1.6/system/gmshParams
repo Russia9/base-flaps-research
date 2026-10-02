@@ -31,5 +31,12 @@ xAftStart     620;     // body | aft seam (fins start at x = 660)
 xZoneEnd      1200;    // downstream end of the aft zone (base at x = 800)
 rZone         120;     // inner-zone radius (fin tips reach r = 86.7)
 
+// Block layout: 8 sectors of 45 degrees in every zone, a 2x2 core where the
+// axis lies in the fluid.
+coreTip       0.5;     // nose core half-width where it meets the ogive (phi = 0)
+xTipInterface -30;     // where the tip-patch interface reaches r = rZone
+coreWake      20;      // wake core half-width behind the base
+coreFar       60;      // far-zone core half-width upstream and downstream
+
 
 // ************************************************************************* //
