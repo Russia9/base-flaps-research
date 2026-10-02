@@ -33,10 +33,30 @@ rZone         120;     // inner-zone radius (fin tips reach r = 86.7)
 
 // Block layout: 8 sectors of 45 degrees in every zone, a 2x2 core where the
 // axis lies in the fluid.
-coreTip       0.5;     // nose core half-width where it meets the ogive (phi = 0)
+coreTip       0.15;    // nose core half-width where it meets the ogive (phi = 0)
 xTipInterface -30;     // where the tip-patch interface reaches r = rZone
 coreWake      20;      // wake core half-width behind the base
 coreFar       60;      // far-zone core half-width upstream and downstream
+xWakeSplit    820;     // wake blocks split: near part | radially relaxing part
+
+// Spacing (mm). Cell counts per edge family follow from these.
+nTheta        16;      // cells per 45-degree sector, every zone (seam rule)
+firstLayer    0.003;   // first wall cell, 3 um
+layerRatio    1.2;     // growth inside the wall stack
+nLayers       20;      // cells in the wall stack
+firstLayerTip 0.02;    // first cell on the tip patch (first ~1.5 mm of the nose)
+growth        1.1;     // growth everywhere else
+hUpstream     2.0;     // axial cell at the nose-zone inlet
+hOgive        1.0;     // max axial wall cell on the ogive
+hShoulder     0.5;     // axial wall cell at the shoulder kink
+hWall         2.0;     // max axial wall cell on the cylinder (wall aspect < 1000)
+hRingOut      4.0;     // radial cell at r = rZone
+hRelax        2.0;     // axial cell at xWakeSplit
+hWake         4.0;     // max axial cell at the end of the wake
+hWakeRadial   1.0;     // radial cell at r = R at the end of the wake
+hSeam         4.0;     // far-zone cell at its seams with the inner zones
+hFarMid       8.0;     // far-zone axial cell around the inner zones
+hFar          30.0;    // far-zone max cell
 
 
 // ************************************************************************* //
