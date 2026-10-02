@@ -7,8 +7,9 @@ set -euo pipefail
 #
 # Geometry parameters are read from constant/caseProperties. The case must
 # already exist; create one with scripts/create_case.py. A case with
-# system/blockMeshParams is meshed fully structured by scripts/gen_blockmesh.py
-# (no OpenSCAD, no snappyHexMesh); otherwise the snappy pipeline runs.
+# system/gmshParams is meshed by scripts/gen_gmsh.py (Gmsh, via uv), one with
+# system/blockMeshParams fully structured by scripts/gen_blockmesh.py; neither
+# uses OpenSCAD or snappyHexMesh. Otherwise the snappy pipeline runs.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -132,15 +133,19 @@ validate_config() {
         ''|*[!0-9]*) usage_error "MAX_CELLS must be a non-negative integer" ;;
     esac
 
-    if [ -f "$CASE/system/blockMeshParams" ]; then
-        STRUCTURED=1
+    MESHER=snappy
+    if [ -f "$CASE/system/gmshParams" ]; then
+        MESHER=gmsh
+        DEPENDENCIES="${GMSH_PYTHON:-uv} gmshToFoam transformPoints foamDictionary decomposePar checkMesh"
+    elif [ -f "$CASE/system/blockMeshParams" ]; then
+        MESHER=blockmesh
         DEPENDENCIES="blockMesh decomposePar checkMesh python3"
     fi
 
     for exe in $DEPENDENCIES; do
         need_command "$exe"
     done
-    [ -n "${STRUCTURED:-}" ] || OPENSCAD=$(detect_openscad)
+    [ "$MESHER" != snappy ] || OPENSCAD=$(detect_openscad)
 }
 
 init_case() {
@@ -155,8 +160,8 @@ init_case() {
     L=$(foam_scalar "$params" L 140.0)
 
     echo "case      : $CASE"
-    if [ -n "${STRUCTURED:-}" ]; then
-        echo "mesher    : structured (scripts/gen_blockmesh.py)"
+    if [ "$MESHER" != snappy ]; then
+        echo "mesher    : $MESHER"
     else
         echo "geometry  : $GEOMETRY"
         echo "openscad  : $OPENSCAD"
@@ -255,6 +260,21 @@ build_structured_mesh() {
     decomposePar -force
 }
 
+build_gmsh_mesh() {
+    # GMSH_PYTHON: a Python with the gmsh package (e.g. a venv on the CFD
+    # server, which has no uv); otherwise uv provides it.
+    if [ -n "${GMSH_PYTHON:-}" ]; then
+        "$GMSH_PYTHON" "$ROOT/scripts/gen_gmsh.py" . --volume 2>&1 | tee log.gmsh
+    else
+        uv run "$ROOT/scripts/gen_gmsh.py" . --volume 2>&1 | tee log.gmsh
+    fi
+    gmshToFoam mesh.msh 2>&1 | tee log.gmshToFoam
+    transformPoints -scale 0.001 2>&1 | tee log.transformPoints   # Gmsh works in mm
+    foamDictionary constant/polyMesh/boundary -entry entry0/fuselage/type -set wall >/dev/null
+    rm -f mesh.msh
+    decomposePar -force
+}
+
 verify_mesh() {
     local cell_count
 
@@ -287,7 +307,9 @@ main() {
     clean_artifacts
 
     pushd "$CASE" >/dev/null
-    if [ -n "${STRUCTURED:-}" ]; then
+    if [ "$MESHER" = gmsh ]; then
+        build_gmsh_mesh
+    elif [ "$MESHER" = blockmesh ]; then
         build_structured_mesh
     else
         generate_surface
