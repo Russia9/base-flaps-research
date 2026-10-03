@@ -7,6 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Parametric CFD study of arc-shaped aft-base fins on a supersonic ogive-cylinder
 fuselage. Pipeline is
 OpenSCAD → STL → blockMesh → snappyHexMesh → HiSA → Python post-processor.
+A zoned structured Gmsh mesh is being developed to replace snappy (see
+"Zoned Gmsh mesh" below).
 See `README.md` for the parameter space and physical setup.
 
 Work is currently on two hand-tuned tracked cases at Ma 1.5, not an automated
@@ -183,33 +185,59 @@ Iterating on solver dicts only: edit the case's `system/*` in place — no
 regeneration step is needed, since `rebuild-mesh.sh` preserves dictionaries.
 Geometry changes always require `rebuild-mesh.sh`.
 
-## Structured mesh (in development, bare body only)
+## Zoned Gmsh mesh (in development, bare body only)
 
-A case that has `system/blockMeshParams` takes a separate path in
-`rebuild-mesh.sh`: `scripts/gen_blockmesh.py` → `blockMesh` → `decomposePar`
-→ `checkMesh`, with no OpenSCAD and no snappy. The generator reads `D, N`
-from `caseProperties`, takes the resolution knobs (mm) from
-`blockMeshParams`, and writes `system/blockMeshDict`. That dict is
-**generated**: change the params and rerun, don't edit it. Stage 1 refuses
-`N > 0`. First case: `openfoam/bm_no_stab_M1.6`. This track sits outside
-the sNN log until the finned version is ready.
+A case with `system/gmshParams` takes the Gmsh path in `rebuild-mesh.sh`, with
+no OpenSCAD and no snappy:
+`scripts/gen_gmsh.py --volume` → `gmshToFoam` → scale mm → m → `fuselage` set
+to wall → `stitchMesh` the zone seams → `decomposePar` → `checkMesh`. The
+script needs the `gmsh` Python package: via `uv` locally, or
+`GMSH_PYTHON=~/venvs/gmsh/bin/python` on the CFD server (no uv there). First
+case: `openfoam/gm_no_stab_M1.6` (9.6 M hexahedra, Mesh OK). This track sits
+outside the sNN log until the finned version is ready.
 
-- The nose is **sharp**, as in the report (21° tip half-angle, so the shock
-  attaches at Ma 1.6). The scad's `R_nose` cap was only there for snappy's
-  layers. The tip is a 2×2 core patch. The apex is an ordinary vertex, so no
-  cell is degenerate.
-- Wall spacing comes from grading: `firstLayer` 3 µm, `nLayers` at
-  `layerRatio`, then `outerRatio`. It applies on the body, on the base disk and
-  radially at the base rim. Wall cells must keep axial and circumferential
-  size ≤ 1000 × `firstLayer`, or checkMesh flags aspect ratio.
-- No surface projection is used. The ogive is split into blocks of at most
-  `ogiveBlock` mm, so blockMesh's edge interpolation stays within about 0.3 µm
-  of the analytic surface.
+- **Zones, each with its own cell counts.** Inside r ≤ `rZone`: nose
+  (x `xZoneStart`..`xNoseEnd`), body (..`xAftStart`), aft (..`xZoneEnd`, base
+  and near wake; the fins go here later); the far zone is everything else.
+  nose | body | aft share faces (conformal). Inner | far are separate
+  geometry and are joined by `stitchMesh` (non-conformal, integral mode),
+  so neither side's clustering leaks into the other. The seams are named by
+  piece (`seam_inner_*`, `seam_far_*` for `side`, `up`, `down`) and stitched
+  one pair at a time: stitching the cylinder and end disks as one patch fails
+  at the 90° edges between them. `stitchMesh` and `createPatch` read the
+  fields, so `0/` is moved aside while they run.
+- **Seam rule:** a cylindrical seam must have the same circumferential count
+  (`nTheta` per 45° sector) on both sides, so both facet the cylinder with the
+  same chords; only the axial and radial counts may differ.
+- **Every zone is split into hexahedral blocks** (8 sectors of 45°; a 2×2
+  core where the axis is in the fluid). The geometry step checks block count
+  and hexahedral topology (`--geometry-only` stops there). Cylinders are built
+  from eight non-periodic 45° patches, because a periodic face's parameter seam
+  on a sector boundary folds the structured faces next to it.
+- **Sharp nose**, as in the report (21° tip half-angle, attached shock at
+  Ma 1.6; the scad's `R_nose` cap was only for snappy's layers). The nose core
+  is a square frustum whose sides leave the tip patch at 45° − β; a ruled
+  "funnel" from the patch edges to r = `rZone` splits the ring around it.
+  The tip patch (`coreTip`, the first ~0.45 mm) gets a 20 µm first cell
+  (`firstLayerTip`): 3 µm layers interpolated across the core cross the wall
+  there. That is the y⁺ maximum (~7); the wall average is ~0.45.
+- **Spacing:** every block edge belongs to an edge family that shares one cell
+  count; the distribution per edge comes from `gmshParams` (3 µm wall stack at
+  ratio 1.2, then `growth`). Inner-zone edge nodes are moved to the exact
+  spacing after Gmsh meshes the curves; far-zone edges use Gmsh's own
+  single-ratio progression. The wake is split at `xWakeSplit` so the rim's
+  3 µm radial spacing relaxes downstream instead of running the whole wake.
+- **Viewing:** every run writes `surface.vtk` (all block faces, cell data
+  `group`/`zone`/`face`/`minSJ`) for ParaView; `--gui` opens Gmsh.
+- Known: ~300 faces > 70° non-orthogonality on the upstream seam disk
+  (x = `xZoneStart`, freestream) and ~800 at the tip; checkMesh still passes.
 
 ## Linting and validation
 
 The Python scripts are **stdlib-only** — no `requirements.txt`, virtualenv, or
-install step; run them with `python3` directly. Lint with `rtk ruff check .`
+install step; run them with `python3` directly. The one exception is
+`scripts/gen_gmsh.py`, which needs `gmsh` and declares it inline (PEP 723) for
+`uv run`. Lint with `rtk ruff check .`
 (a `.ruff_cache/` is present). There is **no unit-test framework**; validation
 is the dry-run path plus sanity checks: `checkMesh -constant -noZero` must report
 `Mesh OK`, `postProcessing/forces` must be non-empty, `results/<case>/coefficients.csv`

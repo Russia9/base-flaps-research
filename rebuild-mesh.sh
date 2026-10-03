@@ -7,9 +7,9 @@ set -euo pipefail
 #
 # Geometry parameters are read from constant/caseProperties. The case must
 # already exist; create one with scripts/create_case.py. A case with
-# system/gmshParams is meshed by scripts/gen_gmsh.py (Gmsh, via uv), one with
-# system/blockMeshParams fully structured by scripts/gen_blockmesh.py; neither
-# uses OpenSCAD or snappyHexMesh. Otherwise the snappy pipeline runs.
+# system/gmshParams is meshed by scripts/gen_gmsh.py (zoned structured Gmsh
+# mesh, stitched in OpenFOAM; no OpenSCAD or snappyHexMesh). Otherwise the
+# snappy pipeline runs.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -137,9 +137,6 @@ validate_config() {
     if [ -f "$CASE/system/gmshParams" ]; then
         MESHER=gmsh
         DEPENDENCIES="${GMSH_PYTHON:-uv} gmshToFoam transformPoints foamDictionary stitchMesh createPatch decomposePar checkMesh"
-    elif [ -f "$CASE/system/blockMeshParams" ]; then
-        MESHER=blockmesh
-        DEPENDENCIES="blockMesh decomposePar checkMesh python3"
     fi
 
     for exe in $DEPENDENCIES; do
@@ -254,12 +251,6 @@ build_mesh() {
     }
 }
 
-build_structured_mesh() {
-    python3 "$ROOT/scripts/gen_blockmesh.py" . 2>&1 | tee log.genBlockMesh
-    blockMesh 2>&1 | tee log.blockMesh
-    decomposePar -force
-}
-
 build_gmsh_mesh() {
     # GMSH_PYTHON: a Python with the gmsh package (e.g. a venv on the CFD
     # server, which has no uv); otherwise uv provides it.
@@ -286,6 +277,7 @@ stitch_gmsh_seams() {
     mv 0 0.fields
     for where in side up down; do
         stitchMesh -overwrite "seam_far_$where" "seam_inner_$where" > "log.stitchMesh.$where" 2>&1 || {
+            rm -rf 0
             mv 0.fields 0
             echo "error: stitchMesh failed for the $where seam; see log.stitchMesh.$where" >&2
             exit 1
@@ -294,6 +286,9 @@ stitch_gmsh_seams() {
     printf 'FoamFile { version 2.0; format ascii; class dictionary; object createPatchDict; }\npointSync false;\npatches ();\n' \
         > createPatchDict.removeEmpty
     createPatch -overwrite -dict createPatchDict.removeEmpty > log.createPatch 2>&1   # drops the emptied seams
+    rm -f constant/polyMesh/meshModifiers   # stitchMesh's sliding-interface definition
+    # createPatch writes meshPhi into a fresh 0/; replace it with the fields.
+    rm -rf 0
     mv 0.fields 0
     n=$(grep -c "seam_" constant/polyMesh/boundary || true)
     [ "$n" -eq 0 ] || {
@@ -336,8 +331,6 @@ main() {
     pushd "$CASE" >/dev/null
     if [ "$MESHER" = gmsh ]; then
         build_gmsh_mesh
-    elif [ "$MESHER" = blockmesh ]; then
-        build_structured_mesh
     else
         generate_surface
         build_mesh

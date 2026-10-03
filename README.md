@@ -129,7 +129,7 @@ It also prints a convergence summary (mean over the last 10% of samples). Use th
 | Parametric geometry | OpenSCAD |
 | Surface mesh export | STL via OpenSCAD |
 | Background mesh | blockMesh (OpenFOAM v2512) |
-| Volume mesh | snappyHexMesh (OpenFOAM v2512) |
+| Volume mesh | snappyHexMesh (OpenFOAM v2512); zoned structured Gmsh mesh in development (`scripts/gen_gmsh.py`) |
 | CFD solver | HiSA (density-based, pseudo-transient steady state) |
 | Turbulence model | k-ω SST |
 | Post-processing | Python 3 (stdlib only) |
@@ -161,12 +161,15 @@ base-flaps-research/
 │   │       ├── controlDict             # functions { #include "postProcess" }
 │   │       ├── postProcess             # forces, MachNo, schlieren, magGradP, Cp
 │   │       ├── blockMeshDict, snappyHexMeshDict, decomposeParDict, …
-│   └── arc_no_stab/            # Clean-body baseline, N = 0 (arc minus the stabilizers)
+│   ├── arc_no_stab/            # Clean-body baseline, N = 0 (arc minus the stabilizers)
+│   └── gm_no_stab_M1.6/        # Bare body, Ma 1.6, zoned Gmsh mesh (system/gmshParams)
 ├── scripts/
 │   ├── create_case.py          # clone a case's dictionaries, retarget Mach + geometry parameters
+│   ├── gen_gmsh.py             # zoned structured Gmsh mesh (OCC geometry, hex blocks) → mesh.msh
 │   ├── wall_breakdown.py       # wall force split: nose/cylinder/fins/base, fin roll by chord
 │   └── post_process.py         # forces.dat → results/<case>/coefficients.csv (Cx..Mz)
-├── rebuild-mesh.sh             # OpenSCAD → STL → blockMesh + parallel snappyHexMesh -overwrite + decompose
+├── rebuild-mesh.sh             # OpenSCAD → STL → blockMesh + parallel snappyHexMesh -overwrite + decompose;
+│                               # with system/gmshParams: gen_gmsh.py → gmshToFoam → stitchMesh → decompose
 ├── run-simulation.sh           # dry-run/solve → reconstructPar → post_process
 └── results/                    # Per-case coefficient CSVs (written by post_process.py)
 ```
