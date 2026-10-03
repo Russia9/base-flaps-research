@@ -300,7 +300,11 @@ def build(body: Body, P: dict) -> dict:
         if len(names) == 2:
             key = "seam_" + "_".join(names)
         elif on_interface:
-            key = f"seam_{names[0]}_far" if names[0] != "far" else "seam_far_inner"
+            # Named by side and position: stitchMesh couples each smooth piece
+            # (end disk or cylinder) separately; across the 90-degree edges
+            # between them its projection fails.
+            where = ("up" if abs(bb[0] - xs[0]) < PAD else "down") if on_end else "side"
+            key = f"seam_{'far' if names[0] == 'far' else 'inner'}_{where}"
         elif bb[3] < x_in + PAD:
             key = "inlet"
         elif bb[0] > x_out - PAD:

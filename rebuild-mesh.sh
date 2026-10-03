@@ -136,7 +136,7 @@ validate_config() {
     MESHER=snappy
     if [ -f "$CASE/system/gmshParams" ]; then
         MESHER=gmsh
-        DEPENDENCIES="${GMSH_PYTHON:-uv} gmshToFoam transformPoints foamDictionary decomposePar checkMesh"
+        DEPENDENCIES="${GMSH_PYTHON:-uv} gmshToFoam transformPoints foamDictionary stitchMesh createPatch decomposePar checkMesh"
     elif [ -f "$CASE/system/blockMeshParams" ]; then
         MESHER=blockmesh
         DEPENDENCIES="blockMesh decomposePar checkMesh python3"
@@ -272,7 +272,34 @@ build_gmsh_mesh() {
     transformPoints -scale 0.001 2>&1 | tee log.transformPoints   # Gmsh works in mm
     foamDictionary constant/polyMesh/boundary -entry entry0/fuselage/type -set wall >/dev/null
     rm -f mesh.msh
+    stitch_gmsh_seams
     decomposePar -force
+}
+
+# Join the inner zones to the far zone (non-conformal, integral mode). Each
+# smooth seam piece is stitched on its own: across the 90-degree edges
+# between the cylinder and the end disks stitchMesh's projection fails. The
+# far side is the master. stitchMesh and createPatch read the fields, which
+# have no seam entries, so 0/ is moved aside meanwhile.
+stitch_gmsh_seams() {
+    local where n
+    mv 0 0.fields
+    for where in side up down; do
+        stitchMesh -overwrite "seam_far_$where" "seam_inner_$where" > "log.stitchMesh.$where" 2>&1 || {
+            mv 0.fields 0
+            echo "error: stitchMesh failed for the $where seam; see log.stitchMesh.$where" >&2
+            exit 1
+        }
+    done
+    printf 'FoamFile { version 2.0; format ascii; class dictionary; object createPatchDict; }\npointSync false;\npatches ();\n' \
+        > createPatchDict.removeEmpty
+    createPatch -overwrite -dict createPatchDict.removeEmpty > log.createPatch 2>&1   # drops the emptied seams
+    mv 0.fields 0
+    n=$(grep -c "seam_" constant/polyMesh/boundary || true)
+    [ "$n" -eq 0 ] || {
+        echo "error: $n seam patches still have faces after stitching" >&2
+        exit 1
+    }
 }
 
 verify_mesh() {
