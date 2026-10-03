@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import argparse
 import math
+import shutil
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -46,6 +48,7 @@ PARAMS = {
     "hUpstream": 2.0, "hOgive": 1.0, "hShoulder": 0.5, "hWall": 2.0, "hRingOut": 4.0,
     "hWake": 4.0, "hSeam": 4.0, "hFarMid": 8.0, "hFar": 30.0,
     "xWakeSplit": 820.0, "hRelax": 2.0, "hWakeRadial": 1.0, "firstLayerTip": 0.02,
+    "xSlabEnd": 900.0,
 }
 INTEGER = ("nTheta", "nLayers")
 
@@ -193,13 +196,28 @@ def fragment(zones: dict[int, str], tools: list) -> dict[int, str]:
     return new
 
 
-def build(body: Body, P: dict) -> dict:
+def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
+    """Zones, split into hexahedral blocks, and the named faces.
+
+    Zones sharing a group are fragmented together and share their faces;
+    different groups are built separately, so the seams between them are two
+    independent copies of the same surface, stitched non-conformally later.
+    The bare body (no fins) uses groups {nose, body, aft} and {far}. With fins,
+    a slab x = xAftStart..xSlabEnd holds the fins and the base, from the axis
+    to the far field, with its own circumferential count: {nose, body},
+    {slab}, {wake}, {far}, {far_slab}, {far_aft}. The count changes only across
+    the slab's x-planes, so every cylindrical seam keeps the same count on
+    both sides.
+    """
     occ = gmsh.model.occ
     R, total = body.R, body.total
     x_in, x_out, r_ff, r_z = P["xInlet"], P["xOutlet"], P["rFar"], P["rZone"]
     xs = [P["xZoneStart"], P["xNoseEnd"], P["xAftStart"], P["xZoneEnd"]]
     a, s_w, s_f = P["coreTip"], P["coreWake"], P["coreFar"]
     thetas = [k * math.pi / 4 for k in range(8)]
+    slab = (xs[2], P["xSlabEnd"]) if spec else None
+    if slab and not total < slab[1] < xs[3]:
+        raise ValueError("xSlabEnd must lie between the base and xZoneEnd")
 
     # Body: revolve the closed profile (apex, ogive arc, cylinder, base, axis).
     p_apex = occ.addPoint(0, 0, 0)
@@ -212,19 +230,42 @@ def build(body: Body, P: dict) -> dict:
     profile = occ.addPlaneSurface([loop])
     solid = [(3, t) for d, t in occ.revolve([(2, profile)], 0, 0, 0, 1, 0, 0, 2 * math.pi) if d == 3]
     occ.remove([(0, p_c)])
+    v_body = occ.getMass(*solid[0])
+    fin_info = {}
+    if spec:
+        solid, _ = occ.fuse(solid, build_fins(spec))
+        occ.synchronize()
+        fin_info = {"exposed_volume": occ.getMass(*solid[0]) - v_body,
+                    "wall_area": sum(occ.getMass(*f) for f in gmsh.model.getBoundary(solid, oriented=False))}
 
-    # Zones. The inner zones (nose, body, aft) and the far zone are built and
-    # split separately, so the seams between them are two independent copies
-    # of the same surface: each side keeps its own block layout and the
-    # meshes are stitched non-conformally in OpenFOAM.
+    # Zone layout: (name, x0, x1, inner?, group).
+    if slab:
+        layout = [("nose", xs[0], xs[1], True, 0), ("body", xs[1], slab[0], True, 0),
+                  ("slab", slab[0], slab[1], True, 1), ("wake", slab[1], xs[3], True, 2),
+                  ("far", x_in, slab[0], False, 3), ("far_slab", slab[0], slab[1], False, 4),
+                  ("far_aft", slab[1], x_out, False, 5)]
+    else:
+        layout = [("nose", xs[0], xs[1], True, 0), ("body", xs[1], xs[2], True, 0),
+                  ("aft", xs[2], xs[3], True, 0), ("far", x_in, x_out, False, 1)]
     zones = {}
-    for name, (x0, x1) in (("nose", xs[0:2]), ("body", xs[1:3]), ("aft", xs[2:4])):
-        pieces, _ = occ.cut([x_cylinder(x0, x1 - x0, r_z)], solid, removeTool=False)
+    for name, x0, x1, inner, _ in layout:
+        if inner:
+            pieces, _ = occ.cut([x_cylinder(x0, x1 - x0, r_z)], solid, removeTool=False)
+        else:
+            hole = max(x0, xs[0]), min(x1, xs[3])
+            tools = [x_cylinder(hole[0], hole[1] - hole[0], r_z)] if hole[1] > hole[0] else []
+            pieces, _ = occ.cut([x_cylinder(x0, x1 - x0, r_ff)], tools) if tools else ([x_cylinder(
+                x0, x1 - x0, r_ff)], None)
         zones |= {v: name for d, v in pieces if d == 3}
-    pieces, _ = occ.cut([x_cylinder(x_in, x_out - x_in, r_ff)], [x_cylinder(xs[0], xs[3] - xs[0], r_z)])
-    far = {v: "far" for d, v in pieces if d == 3}
     occ.remove(solid, recursive=True)
     occ.synchronize()
+    group_of = {name: g for name, *_, g in layout}
+
+    def of_group(g):
+        return {v: n for v, n in zones.items() if group_of[n] == g}
+
+    def others(g):
+        return {v: n for v, n in zones.items() if group_of[n] != g}
 
     # Nose core: a square frustum whose sides leave the tip patch at 45 - beta
     # from the axis, halfway between the wall normal and the wall itself, so
@@ -250,76 +291,122 @@ def build(body: Body, P: dict) -> dict:
     zones = {v: n for v, n in zones.items() if n != "nose"} | nose
     funnel = tip_funnel(a, x_a, x_45, P["xTipInterface"], r_z)
 
-    # Inner zones: 8 sectors; the 45-degree cuts stop at the core corners.
-    tools = [half_plane(t, xs[0], xs[3], 0.0, r_z) for t in thetas[0::2]]
+    # Group 0 (nose, body and, without fins, aft): 8 sectors; the 45-degree
+    # cuts stop at the core corners. Upstream of the base the cut follows the
+    # core's corner line to x_end, then runs inside the body; it meets the
+    # base plane only at the rim, so the base disk is not cut. Behind the base
+    # it stops at the wake core's corner.
+    x_g0 = slab[0] if slab else xs[3]
+    tools = [half_plane(t, xs[0], x_g0, 0.0, r_z) for t in thetas[0::2]]
     for t in thetas[1::2]:
-        # Upstream of the base the cut follows the core's corner line to
-        # x_end, then runs inside the body and meets the base plane only at
-        # the rim, so the base disk is not cut; behind the base it stops at
-        # the wake core's corner.
-        tools += [polygon_half_plane(t, [(xs[0], SQ2 * h(xs[0])), (x_end, SQ2 * h(x_end)),
-                                         (x_end, 0.0), (total - 0.5 * R, 0.0), (total, R),
-                                         (total, r_z), (xs[0], r_z)]),
-                  half_plane(t, total, xs[3], SQ2 * s_w, r_z)]
-    tools += funnel + [square_prism(total, s_w, xs[3], s_w),
-                       x_cylinder(total, xs[3] - total, R),
-                       annulus(body.l_ogive, 0.0, r_z),          # shoulder
-                       annulus(total, R, r_z),                    # base plane, outside the base disk
-                       annulus(P["xWakeSplit"], 0.0, r_z)]        # wake: near part | relaxing part
-    zones = fragment(zones, tools)
+        if slab:
+            tools.append(polygon_half_plane(t, [(xs[0], SQ2 * h(xs[0])), (x_end, SQ2 * h(x_end)),
+                                                (x_end, 0.0), (x_g0, 0.0), (x_g0, r_z), (xs[0], r_z)]))
+        else:
+            tools += [polygon_half_plane(t, [(xs[0], SQ2 * h(xs[0])), (x_end, SQ2 * h(x_end)),
+                                             (x_end, 0.0), (total - 0.5 * R, 0.0), (total, R),
+                                             (total, r_z), (xs[0], r_z)]),
+                      half_plane(t, total, xs[3], SQ2 * s_w, r_z)]
+    tools += funnel + [annulus(body.l_ogive, 0.0, r_z)]          # shoulder
+    if not slab:
+        tools += [square_prism(total, s_w, xs[3], s_w),
+                  x_cylinder(total, xs[3] - total, R),
+                  annulus(total, R, r_z),                         # base plane, outside the base disk
+                  annulus(P["xWakeSplit"], 0.0, r_z)]             # wake: near part | relaxing part
+    zones = others(0) | fragment(of_group(0), tools)
 
-    # Far zone: core + two rings upstream and downstream, one ring around
-    # the inner zones.
-    far_tools = [half_plane(t, x_in, x_out, 0.0, r_ff) for t in thetas[0::2]]
-    for t in thetas[1::2]:
-        far_tools += [half_plane(t, x_in, xs[0], SQ2 * s_f, r_ff),
-                      half_plane(t, xs[0], xs[3], r_z, r_ff),
-                      half_plane(t, xs[3], x_out, SQ2 * s_f, r_ff)]
-    far_tools += [square_prism(x_in, s_f, xs[0], s_f), square_prism(xs[3], s_f, x_out, s_f),
-                  x_cylinder(x_in, xs[0] - x_in, r_z),
-                  x_cylinder(xs[3], x_out - xs[3], r_z),
-                  annulus(xs[0], r_z, r_ff), annulus(xs[3], r_z, r_ff)]
-    zones = zones | fragment(far, far_tools)
+    def wake_tools(x0, x1):
+        """Core square, inner ring (to r = R), outer ring (to r_z) in 8 sectors."""
+        return ([half_plane(t, x0, x1, 0.0, r_z) for t in thetas[0::2]]
+                + [half_plane(t, x0, x1, SQ2 * s_w, r_z) for t in thetas[1::2]]
+                + [square_prism(x0, s_w, x1, s_w), x_cylinder(x0, x1 - x0, R)])
 
-    # Faces: wall, outer patches, seams. A face of one zone that lies on the
-    # inner/far interface is a seam; inner|inner seams are shared faces.
+    def far_tools(x0, x1):
+        """Far zone between x0 and x1: core + two rings outside the inner zones'
+        x-range, one ring around them."""
+        t_ = [half_plane(t, x0, x1, 0.0, r_ff) for t in thetas[0::2]]
+        for t in thetas[1::2]:
+            for a0, a1, r0 in ((x0, min(x1, xs[0]), SQ2 * s_f), (max(x0, xs[0]), min(x1, xs[3]), r_z),
+                               (max(x0, xs[3]), x1, SQ2 * s_f)):
+                if a1 > a0:
+                    t_.append(half_plane(t, a0, a1, r0, r_ff))
+        for a0, a1 in ((x0, min(x1, xs[0])), (max(x0, xs[3]), x1)):
+            if a1 > a0:
+                t_ += [square_prism(a0, s_f, a1, s_f), x_cylinder(a0, a1 - a0, r_z)]
+        for xp in (xs[0], xs[3]):
+            if x0 < xp < x1:
+                t_.append(annulus(xp, r_z, r_ff))
+        return t_
+
+    if slab:
+        zones = others(2) | fragment(of_group(2), wake_tools(slab[1], xs[3]))
+        for g, (x0, x1) in ((3, (x_in, slab[0])), (4, slab), (5, (slab[1], x_out))):
+            zones = others(g) | fragment(of_group(g), far_tools(x0, x1))
+    else:
+        zones = others(1) | fragment(of_group(1), far_tools(x_in, x_out))
+
+    # Faces: wall (body, fins), outer patches, shared faces between zones of
+    # one group, and stitched seams between groups. A seam is named by its
+    # pair and side; stitchMesh couples each smooth piece separately (across
+    # the 90-degree edges between a cylinder and a disk its projection fails),
+    # with the coarser side as master.
     owners: dict[int, list[int]] = {}
     for v in zones:
         for _, s in gmsh.model.getBoundary([(3, v)], oriented=False):
             owners.setdefault(s, []).append(v)
+    planes = {xs[0]: "up", xs[3]: "down"}
+    if slab:
+        planes |= {slab[0]: "slab_in", slab[1]: "slab_out"}
+    fine = {"slab", "far_slab"}
     groups: dict[str, list[int]] = {}
+    shared = set()
     for s, own in owners.items():
         names = sorted({zones[v] for v in own})
         if len(own) == 2 and len(names) == 1:
             continue                                   # internal block face
+        if len(names) == 2:
+            key = "shared_" + "_".join(names)          # conformal face between zones of a group
+            shared.add(key)
+            groups.setdefault(key, []).append(s)
+            continue
+        zone = names[0]
         bb = gmsh.model.getBoundingBox(2, s)
         rmax = max(abs(v) for v in bb[1:3] + bb[4:6])
-        on_end = abs(bb[0] - bb[3]) < PAD and min(abs(bb[0] - xs[0]), abs(bb[0] - xs[3])) < PAD
-        on_interface = (rmax < r_z + PAD and bb[0] > xs[0] - PAD and bb[3] < xs[3] + PAD
-                        and (on_end or _on_cylinder(s, r_z)))
-        if len(names) == 2:
-            key = "seam_" + "_".join(names)
-        elif on_interface:
-            # Named by side and position: stitchMesh couples each smooth piece
-            # (end disk or cylinder) separately; across the 90-degree edges
-            # between them its projection fails.
-            where = ("up" if abs(bb[0] - xs[0]) < PAD else "down") if on_end else "side"
-            key = f"seam_{'far' if names[0] == 'far' else 'inner'}_{where}"
+        flat_x = abs(bb[0] - bb[3]) < PAD
+        plane = next((n for xp, n in planes.items() if flat_x and abs(bb[0] - xp) < PAD), None)
+        far_side = zone.startswith("far")
+        if plane and (rmax < r_z + PAD or plane.startswith("slab")):
+            if plane.startswith("slab") and rmax > r_z + PAD:
+                plane = "f" + plane                    # far-zone part of a slab plane
+            if plane in ("up", "down"):
+                role = "master" if far_side else "slave"
+            else:
+                role = "slave" if zone in fine else "master"
+            key = f"seam_{plane}_{role}"
+        elif rmax < r_z + PAD and bb[0] > xs[0] - PAD and bb[3] < xs[3] + PAD and _on_cylinder(s, r_z):
+            part = "side"
+            if slab:
+                mid = 0.5 * (bb[0] + bb[3])
+                part = "side_fore" if mid < slab[0] else ("side_slab" if mid < slab[1] else "side_aft")
+            key = f"seam_{part}_{'master' if far_side else 'slave'}"
         elif bb[3] < x_in + PAD:
             key = "inlet"
         elif bb[0] > x_out - PAD:
             key = "outlet"
         elif rmax > r_ff - PAD and _on_cylinder(s, r_ff):
             key = "farfield"
+        elif spec and not _on_body(s, body):
+            key = "stabilizers"
         else:
             key = "fuselage"
         groups.setdefault(key, []).append(s)
 
-    for name in ("nose", "body", "aft", "far"):
+    for name, *_ in layout:
         gmsh.model.addPhysicalGroup(3, [v for v, n in zones.items() if n == name], name=name)
     for key, surfs in groups.items():
         gmsh.model.addPhysicalGroup(2, surfs, name=key)
-    return {"zones": zones, "groups": groups, "xs": xs,
+    return {"zones": zones, "groups": groups, "xs": xs, "layout": layout, "shared": shared,
+            "slab": slab, "fins": fin_info, "body_volume": v_body,
             "tip": {"beta": math.degrees(beta), "x_a": x_a, "x_45": x_45, "x_end": x_end,
                     "h_in": h(xs[0])}}
 
@@ -402,6 +489,20 @@ def tip_funnel(a: float, x_a: float, x_45: float, x_f: float, r_z: float) -> lis
     if best[0] > math.radians(10):
         raise RuntimeError(f"tip funnel rulings twisted by {math.degrees(best[0]):.1f} deg")
     return best[1]
+
+
+def _on_body(s: int, body: Body) -> bool:
+    """True if face s lies on the body (ogive, cylinder or base disk)."""
+    (u0, v0), (u1, v1) = gmsh.model.getParametrizationBounds(2, s)
+    uv = [c for f in (0.21, 0.5, 0.79) for g in (0.23, 0.5, 0.77)
+          for c in (u0 + (u1 - u0) * f, v0 + (v1 - v0) * g)]
+    pts = gmsh.model.getValue(2, s, uv)
+    for i in range(0, len(pts), 3):
+        x, r = pts[i], math.hypot(pts[i + 1], pts[i + 2])
+        on_base = abs(x - body.total) < 1e-6 and r < body.R + 1e-6
+        if not on_base and abs(r - body.r(x)) > 1e-4:
+            return False
+    return True
 
 
 def _on_cylinder(s: int, r: float) -> bool:
@@ -800,6 +901,142 @@ def surface_checks(body: Body, P: dict, info: dict, sm: dict) -> list[str]:
     return lines
 
 
+# ── fins (benchmark configuration, report F1) ──────────────────────────────
+
+class FinSpec:
+    """Arc fin exactly as geometry/arc_stabilizers.scad builds it (report F1).
+
+    Radii are absolute (Table 4: R3/R1/R2); the scad asserts R_out == R.
+    In OpenFOAM axes the cross-section of fin 0 is (Y, Z) = (Yc + r sin a,
+    Zc + r cos a) about the arc centre (Yc, Zc); the scad's mirror makes the
+    bow bulge towards +Z, and fin k is fin 0 rotated by k * 360 / N about +X.
+    """
+
+    R_in, R_edge, R_out = 36.0, 38.0, 40.0
+    root_embed, delta = 2.0, 45.0
+
+    def __init__(self, body: Body, N: int, xi_deg: float, L: float):
+        if abs(self.R_out - body.R) > 1e-9:
+            raise ValueError("R_out must equal the body radius (scad assert)")
+        self.N, self.L = N, L
+        self.xi = math.radians(xi_deg)
+        self.root_y = body.R - self.root_embed
+        self.Yc = self.root_y + self.R_edge * math.sin(self.xi / 2)
+        self.Zc = -self.R_edge * math.cos(self.xi / 2)
+        self.chamfer = (self.R_out - self.R_in) / 2 / math.tan(math.radians(self.delta) / 2)
+        self.z = [body.total - L, body.total - L + self.chamfer, body.total - self.chamfer, body.total]
+        self.th = {r: math.atan2(self.root_y - self.Yc, self.Zc_at(r) - self.Zc)
+                   for r in (self.R_in, self.R_edge, self.R_out)}
+        self.th_tip = self.th[self.R_edge] + self.xi
+
+    def Zc_at(self, r: float) -> float:
+        """Z where the circle of radius r about the centre meets Y = root_y (root side)."""
+        return self.Zc + math.sqrt(r * r - (self.root_y - self.Yc) ** 2)
+
+    def point(self, r: float, a: float, x: float) -> tuple[float, float, float]:
+        return (x, self.Yc + r * math.sin(a), self.Zc + r * math.cos(a))
+
+    def tip_radius(self) -> float:
+        return math.hypot(*self.point(self.R_edge, self.th_tip, 0.0)[1:])
+
+
+def build_fins(spec: FinSpec) -> list[tuple[int, int]]:
+    """The N fin solids. Each is sewn from the scad's faces: ruled LE/TE wedges
+    between the edge arc and the inner/outer arcs (proportional parametrisation,
+    as the scad's index-matched polyhedron), cylindrical barrels, and planar root
+    and tip caps."""
+    occ = gmsh.model.occ
+    z0, z1, z2, z3 = spec.z
+    Ri, Re, Ro = spec.R_in, spec.R_edge, spec.R_out
+
+    def arc(r, x):
+        c = occ.addPoint(x, spec.Yc, spec.Zc)
+        p0 = occ.addPoint(*spec.point(r, spec.th[r], x))
+        p1 = occ.addPoint(*spec.point(r, spec.th_tip, x))
+        a = occ.addCircleArc(p0, c, p1)
+        occ.remove([(0, c)])
+        return occ.addWire([a])
+
+    faces = []
+    for (ra, xa), (rb, xb) in (((Re, z0), (Ro, z1)), ((Re, z0), (Ri, z1)), ((Ro, z1), (Ro, z2)),
+                               ((Ri, z1), (Ri, z2)), ((Ro, z2), (Re, z3)), ((Ri, z2), (Re, z3))):
+        faces += [t for d, t in occ.addThruSections([arc(ra, xa), arc(rb, xb)], makeSolid=False,
+                                                    makeRuled=True) if d == 2]
+    for a_of in (lambda r: spec.th[r], lambda r: spec.th_tip):        # root cap, tip cap
+        ring = [(Re, z0), (Ro, z1), (Ro, z2), (Re, z3), (Ri, z2), (Ri, z1)]
+        pts = [occ.addPoint(*spec.point(r, a_of(r), x)) for r, x in ring]
+        lines = [occ.addLine(pts[i], pts[(i + 1) % 6]) for i in range(6)]
+        faces.append(occ.addPlaneSurface([occ.addCurveLoop(lines)]))
+    fin = (3, occ.addVolume([occ.addSurfaceLoop(faces, sewing=True)]))
+    out = [fin]
+    for k in range(1, spec.N):
+        copy = occ.copy([fin])
+        occ.rotate(copy, 0, 0, 0, 1, 0, 0, k * 2 * math.pi / spec.N)
+        out += copy
+    occ.synchronize()
+    return out
+
+
+def stl_mass(path: Path) -> tuple[float, float, float]:
+    """Volume, area and max radius about the x axis of an ASCII or binary STL."""
+    data = path.read_bytes()
+    tris = []
+    if data[:5] == b"solid" and b"facet" in data[:400]:
+        v = [tuple(map(float, ln.split()[1:4])) for ln in data.decode().splitlines()
+             if ln.strip().startswith("vertex")]
+        tris = [v[i:i + 3] for i in range(0, len(v), 3)]
+    else:
+        n = struct.unpack("<I", data[80:84])[0]
+        for i in range(n):
+            f = struct.unpack("<12f", data[84 + 50 * i:84 + 50 * i + 48])
+            tris.append([f[3:6], f[6:9], f[9:12]])
+    vol = area = rmax = 0.0
+    for a, b, c in tris:
+        cr = (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+        vol += (cr[0] * c[0] + cr[1] * c[1] + cr[2] * c[2]) / 6
+        u = [b[i] - a[i] for i in range(3)]
+        w = [c[i] - a[i] for i in range(3)]
+        n_ = (u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0])
+        area += math.sqrt(sum(x * x for x in n_)) / 2
+        rmax = max(rmax, *(math.hypot(p[1], p[2]) for p in (a, b, c)))
+    return abs(vol), area, rmax
+
+
+def fin_check(spec: FinSpec, fins: list, case: Path, props: dict) -> list[str]:
+    """Compare the OCC fins with the scad's own stabilizers.stl and the report."""
+    occ = gmsh.model.occ
+    vol = sum(occ.getMass(*f) for f in fins)
+    area = sum(occ.getMass(*s) for f in fins for s in gmsh.model.getBoundary([f], oriented=False))
+    lines = [(f"  fins: N = {spec.N}, xi = {math.degrees(spec.xi):.2f} deg, chord {spec.L:g} mm "
+              f"(x {spec.z[0]:g}-{spec.z[3]:g}), wedge run {spec.chamfer:.3f} mm"),
+             (f"  tip on the root's radial line at r = {spec.tip_radius():.3f} mm "
+              f"(scad: R - root_embed + 2 R_edge sin(xi/2))"),
+             f"  arc centre (Y, Z) = ({spec.Yc:.4f}, {spec.Zc:.4f}) mm; root angles inner/edge/outer "
+             + "/".join(f"{math.degrees(spec.th[r]):.2f}" for r in (spec.R_in, spec.R_edge, spec.R_out))
+             + " deg"]
+    scad = Path(__file__).resolve().parents[1] / "geometry" / "arc_stabilizers.scad"
+    stl = case / "fins_scad.stl"
+    openscad = next((e for e in ("openscad-nightly", "openscad") if shutil.which(e)), None)
+    if openscad:
+        defs = f"D={props['D']:g}; N={spec.N}; xi={math.degrees(spec.xi):.6g}; L={spec.L:g}; EXPORT=\"stabilizers\";"
+        subprocess.run([openscad, "-o", str(stl), "-D", defs, str(scad)], check=True, capture_output=True)
+        sv, sa, sr = stl_mass(stl)
+        # farthest fin point from the axis: the tip's outer corner, on both sides
+        r_occ = max(math.hypot(*gmsh.model.getValue(0, p, [])[1:])
+                    for f in fins for _, p in gmsh.model.getBoundary([f], recursive=True))
+        ok = True
+        for label, got, want, tol in (("fin volume (mm^3)", vol, sv, 1e-3), ("fin area (mm^2)", area, sa, 1e-3),
+                                      ("max radius (mm)", r_occ, sr, 1e-4)):
+            err = abs(got - want) / want
+            ok &= err < tol
+            lines.append(f"  {label:20s} OCC {got:14.4f}  scad STL {want:14.4f}  rel.err {err:.1e} "
+                         f"{'ok' if err < tol else 'FAIL'}")
+        lines.append("  " + ("FIN CHECKS PASSED" if ok else "FIN CHECKS FAILED"))
+    else:
+        lines.append(f"  OCC fin volume {vol:.4f} mm^3, area {area:.4f} mm^2 (no OpenSCAD to compare)")
+    return lines
+
+
 def real_edges(face):
     """Edges of a face, without OCC's zero-length pole edges (surface-of-revolution apex)."""
     return [e for e in gmsh.model.getBoundary([face], oriented=False)
@@ -821,21 +1058,39 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
 
     lines.append(f"  {'quantity':34s} {'OCC':>16s} {'analytic':>16s}  rel.err")
     v_body, a_lat = body.integrate(0.0, total)
-    a_wall = sum(occ.getMass(2, s) for s in info["groups"]["fuselage"])
-    row("body wall area (mm^2)", a_wall, a_lat + math.pi * R * R)
+    fins = info["fins"]
+    a_wall = sum(occ.getMass(2, s) for k in ("fuselage", "stabilizers") for s in info["groups"].get(k, []))
+    if fins:
+        row("body + fin wall area (mm^2)", a_wall, fins["wall_area"])
+    else:
+        row("body wall area (mm^2)", a_wall, a_lat + math.pi * R * R)
     v_dom = math.pi * P["rFar"] ** 2 * (P["xOutlet"] - P["xInlet"])
     v_fluid = sum(occ.getMass(3, v) for v in info["zones"])
-    row("fluid volume (mm^3)", v_fluid, v_dom - v_body)
-    for name, (x0, x1) in (("nose", xs[0:2]), ("body", xs[1:3]), ("aft", xs[2:4])):
-        vb, _ = body.integrate(max(0.0, x0), min(total, x1))
+    v_fins = fins.get("exposed_volume", 0.0)
+    row("fluid volume (mm^3)", v_fluid, v_dom - v_body - v_fins)
+    for name, x0, x1, inner, _ in info["layout"]:
         got = sum(occ.getMass(3, v) for v, n in info["zones"].items() if n == name)
-        row(f"zone {name} volume (mm^3)", got, math.pi * r_z**2 * (x1 - x0) - vb)
+        if inner:
+            lo, hi = max(0.0, x0), min(total, x1)
+            vb = body.integrate(lo, hi)[0] if hi > lo else 0.0
+            want = math.pi * r_z**2 * (x1 - x0) - vb - (v_fins if name == "slab" else 0.0)
+        else:
+            overlap = max(0.0, min(x1, xs[3]) - max(x0, xs[0]))
+            want = math.pi * (P["rFar"] ** 2 * (x1 - x0) - r_z**2 * overlap)
+        row(f"zone {name} volume (mm^3)", got, want)
 
     # Block topology: every block must be a hexahedron (6 faces of 4 edges,
-    # 12 edges, 8 corners) so it can carry a structured mesh.
-    expected = {"nose": 20, "body": 16, "aft": 48, "far": 48}
+    # 12 edges, 8 corners) so it can carry a structured mesh. The fin slab
+    # is not split into blocks yet.
+    if info["slab"]:
+        expected = {"nose": 20, "body": 16, "slab": None, "wake": 20, "far": 28, "far_slab": 8, "far_aft": 28}
+    else:
+        expected = {"nose": 20, "body": 16, "aft": 48, "far": 48}
     for name, want in expected.items():
         blocks = [v for v, n in info["zones"].items() if n == name]
+        if want is None:
+            lines.append(f"  zone {name:8s}: {len(blocks):3d} volume(s), block split pending")
+            continue
         bad = []
         for v in blocks:
             faces = gmsh.model.getBoundary([(3, v)], oriented=False)
@@ -846,7 +1101,7 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
                 bad.append(f"{v}: {len(faces)}f/{len(edges)}e/{len(corners)}c {per_face}")
         good = len(blocks) == want and not bad
         ok &= good
-        lines.append(f"  zone {name:4s}: {len(blocks):3d} blocks (expected {want}), "
+        lines.append(f"  zone {name:8s}: {len(blocks):3d} blocks (expected {want}), "
                      f"{len(blocks) - len(bad)} hexahedral  {'ok' if good else 'FAIL'}")
         for b in bad[:6]:
             lines.append(f"      not hex: block {b}")
@@ -929,8 +1184,7 @@ def volume_mesh(info: dict, out: Path) -> dict:
     # Shared inner seams are internal faces of one conformal mesh: drop them
     # from the patches before writing.
     for dim, tag in gmsh.model.getPhysicalGroups(2):
-        name = gmsh.model.getPhysicalName(dim, tag)
-        if name in ("seam_body_nose", "seam_aft_body"):
+        if gmsh.model.getPhysicalName(dim, tag) in info["shared"]:
             gmsh.model.removePhysicalGroups([(dim, tag)])
     gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
     gmsh.option.setNumber("Mesh.Binary", 0)
@@ -939,53 +1193,55 @@ def volume_mesh(info: dict, out: Path) -> dict:
     return {"counts": counts, "worst": worst, "low": low}
 
 
-def write_vtk(path: Path, info: dict) -> dict[str, int]:
-    """Write every meshed face as a binary legacy VTK file of quads for ParaView.
+def write_vtk(path: Path, info: dict) -> tuple[dict[str, int], dict[str, int]]:
+    """Write every meshed face as a binary legacy VTK file for ParaView.
 
-    Cell data: group (wall, seams, outer patches, internal block faces; the
-    legend is returned), zone (0 nose, 1 body, 2 aft, 3 far), face (model tag)
-    and minSJ (quad scaled Jacobian).
+    Quads and triangles. Cell data: group (wall, seams, outer patches,
+    internal block faces), zone (layout order), face (model tag) and minSJ
+    (element scaled Jacobian). Returns the group and zone legends.
     """
     names = sorted(info["groups"]) + ["block_face"]
     group_of = {f: names.index(k) for k, fs in info["groups"].items() for f in fs}
-    zone_ids = {"nose": 0, "body": 1, "aft": 2, "far": 3}
-    node_ids, points, quads, cell = {}, [], [], {"group": [], "zone": [], "face": [], "minSJ": []}
+    zone_ids = {name: i for i, (name, *_) in enumerate(info["layout"])}
+    node_ids, points, cells, cell = {}, [], [], {"group": [], "zone": [], "face": [], "minSJ": []}
     for _, f in gmsh.model.getEntities(2):
         owners = gmsh.model.getAdjacencies(2, f)[0]
         zone = min(zone_ids[info["zones"][v]] for v in owners) if len(owners) else -1
         for et, tags, nodes in zip(*gmsh.model.mesh.getElements(2, f)):
-            if gmsh.model.mesh.getElementProperties(et)[3] != 4:
+            k = gmsh.model.mesh.getElementProperties(et)[3]
+            if k not in (3, 4):
                 continue
             q = gmsh.model.mesh.getElementQualities(tags, "minSJ")
             for e in range(len(tags)):
                 ids = []
-                for n in nodes[4 * e:4 * e + 4]:
+                for n in nodes[k * e:k * e + k]:
                     if n not in node_ids:
                         node_ids[n] = len(points)
                         points.append(gmsh.model.mesh.getNode(n)[0])
                     ids.append(node_ids[n])
-                quads.append(ids)
+                cells.append(ids)
                 cell["group"].append(group_of.get(f, len(names) - 1))
                 cell["zone"].append(zone)
                 cell["face"].append(f)
                 cell["minSJ"].append(q[e])
+    size = sum(len(c) + 1 for c in cells)
     with open(path, "wb") as out:
-        out.write(b"# vtk DataFile Version 3.0\nzoned surface mesh\nBINARY\nDATASET UNSTRUCTURED_GRID\n")
+        out.write(b"# vtk DataFile Version 3.0\nzoned mesh faces\nBINARY\nDATASET UNSTRUCTURED_GRID\n")
         out.write(f"POINTS {len(points)} double\n".encode())
         out.write(struct.pack(f">{3 * len(points)}d", *[c for p in points for c in p]))
-        out.write(f"\nCELLS {len(quads)} {5 * len(quads)}\n".encode())
-        out.write(struct.pack(f">{5 * len(quads)}i", *[v for qd in quads for v in (4, *qd)]))
-        out.write(f"\nCELL_TYPES {len(quads)}\n".encode())
-        out.write(struct.pack(f">{len(quads)}i", *([9] * len(quads))))
-        out.write(f"\nCELL_DATA {len(quads)}\n".encode())
+        out.write(f"\nCELLS {len(cells)} {size}\n".encode())
+        out.write(struct.pack(f">{size}i", *[v for c in cells for v in (len(c), *c)]))
+        out.write(f"\nCELL_TYPES {len(cells)}\n".encode())
+        out.write(struct.pack(f">{len(cells)}i", *[9 if len(c) == 4 else 5 for c in cells]))
+        out.write(f"\nCELL_DATA {len(cells)}\n".encode())
         for key in ("group", "zone", "face"):
             out.write(f"SCALARS {key} int 1\nLOOKUP_TABLE default\n".encode())
-            out.write(struct.pack(f">{len(quads)}i", *cell[key]))
+            out.write(struct.pack(f">{len(cells)}i", *cell[key]))
             out.write(b"\n")
         out.write(b"SCALARS minSJ double 1\nLOOKUP_TABLE default\n")
-        out.write(struct.pack(f">{len(quads)}d", *cell["minSJ"]))
+        out.write(struct.pack(f">{len(cells)}d", *cell["minSJ"]))
         out.write(b"\n")
-    return {k: i for i, k in enumerate(names)}
+    return {k: i for i, k in enumerate(names)}, zone_ids
 
 
 def main(argv: list[str]) -> int:
@@ -994,24 +1250,44 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--gui", action="store_true", help="open the result in the Gmsh GUI")
     ap.add_argument("--geometry-only", action="store_true", help="stop after the block layout (step 1)")
     ap.add_argument("--volume", action="store_true", help="also mesh the volume and write mesh.msh (step 3)")
+    ap.add_argument("--fins", action="store_true",
+                    help="build only the fins, check them against the scad, write fins.stl (fin step F1)")
     args = ap.parse_args(argv)
     case = args.case
     try:
         props = (case / "constant" / "caseProperties").read_text()
         D = parse_scalar(props, "D")
         N = int(parse_scalar(props, "N"))
-        if N != 0:
-            raise ValueError(f"N = {N}: only the bare body (N = 0) is supported so far")
+        if N != 0 and not (args.fins or args.geometry_only):
+            raise ValueError(f"N = {N}: with fins only --fins and --geometry-only work so far")
         params = read_params(case)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     body = Body(D)
+    if args.fins:
+        spec = FinSpec(body, N, parse_scalar(props, "xi"), parse_scalar(props, "L"))
+        gmsh.initialize()
+        gmsh.option.setNumber("General.Terminal", 0)
+        try:
+            fins = build_fins(spec)
+            print("\n".join(fin_check(spec, fins, case, {"D": D})))
+            gmsh.write(str(case / "fins.brep"))
+            gmsh.option.setNumber("Mesh.MeshSizeMax", 0.5)
+            gmsh.model.mesh.generate(2)
+            gmsh.write(str(case / "fins.stl"))
+            print(f"wrote {case / 'fins.stl'} (and the scad's {case / 'fins_scad.stl'}) for ParaView")
+            if args.gui:
+                gmsh.fltk.run()
+        finally:
+            gmsh.finalize()
+        return 0
+    spec = FinSpec(body, N, parse_scalar(props, "xi"), parse_scalar(props, "L")) if N else None
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
     try:
-        info = build(body, params)
+        info = build(body, params, spec)
         gmsh.write(str(case / "geometry.brep"))
         t = info["tip"]
         print(f"nose core: tip half-angle {t['beta']:.2f} deg, patch edge x {t['x_a']:.3f}-{t['x_45']:.3f} mm, "
@@ -1021,14 +1297,37 @@ def main(argv: list[str]) -> int:
             print(f"  {key:18s} {len(surfs)} faces")
         print("checks:")
         print("\n".join(check(body, params, info)))
-        if not args.geometry_only:
+        if args.geometry_only:
+            # coarse unstructured preview of every face, for ParaView
+            gmsh.option.setNumber("Mesh.MeshSizeMax", 8.0)
+            gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 12)
+            # Faces touching the apex carry OCC's zero-length pole edge, which
+            # the unstructured mesher rejects; mesh those few structured.
+            for _, f in gmsh.model.getEntities(2):
+                loop = [c for _, c in real_edges((2, f))]
+                if len(loop) == len(gmsh.model.getBoundary([(2, f)], oriented=False)):
+                    continue
+                for c in loop:
+                    gmsh.model.mesh.setTransfiniteCurve(c, 5)
+                ends = {c: [abs(p) for _, p in gmsh.model.getBoundary([(1, c)], oriented=False)] for c in loop}
+                here, corners, todo = ends[loop[0]][0], [], list(loop)
+                while todo:
+                    c = next(c for c in todo if here in ends[c])
+                    todo.remove(c)
+                    corners.append(here)
+                    here = ends[c][1] if ends[c][0] == here else ends[c][0]
+                gmsh.model.mesh.setTransfiniteSurface(f, cornerTags=corners)
+            gmsh.model.mesh.generate(2)
+            legend, zone_ids = write_vtk(case / "geometry.vtk", info)
+            print(f"wrote {case / 'geometry.vtk'}; group: " + ", ".join(f"{i} {k}" for k, i in legend.items())
+                  + "; zone: " + ", ".join(f"{i} {k}" for k, i in zone_ids.items()))
+        else:
             sm = surface_mesh(body, params, info)
             print("surface mesh:")
             print("\n".join(surface_checks(body, params, info, sm)))
-            legend = write_vtk(case / "surface.vtk", info)
-            print(f"wrote {case / 'surface.vtk'}; cell data group: "
-                  + ", ".join(f"{i} {k}" for k, i in legend.items())
-                  + "; zone: 0 nose, 1 body, 2 aft, 3 far")
+            legend, zone_ids = write_vtk(case / "surface.vtk", info)
+            print(f"wrote {case / 'surface.vtk'}; group: " + ", ".join(f"{i} {k}" for k, i in legend.items())
+                  + "; zone: " + ", ".join(f"{i} {k}" for k, i in zone_ids.items()))
             if args.volume:
                 vm = volume_mesh(info, case / "mesh.msh")
                 total = sum(vm["counts"].values())

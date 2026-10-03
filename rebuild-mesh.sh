@@ -267,19 +267,22 @@ build_gmsh_mesh() {
     decomposePar -force
 }
 
-# Join the inner zones to the far zone (non-conformal, integral mode). Each
-# smooth seam piece is stitched on its own: across the 90-degree edges
-# between the cylinder and the end disks stitchMesh's projection fails. The
-# far side is the master. stitchMesh and createPatch read the fields, which
-# have no seam entries, so 0/ is moved aside meanwhile.
+# Join the zone groups (non-conformal, integral mode). gen_gmsh.py names each
+# smooth seam piece seam_<pair>_master / seam_<pair>_slave (the master is the
+# coarser side); each pair is stitched on its own, since across the 90-degree
+# edges between a cylinder and a disk stitchMesh's projection fails.
+# Cylindrical pairs go first. stitchMesh and createPatch read the fields,
+# which have no seam entries, so 0/ is moved aside meanwhile.
 stitch_gmsh_seams() {
-    local where n
+    local pair pairs n
+    pairs=$(grep -oE "seam_[a-z_]+_master" constant/polyMesh/boundary | sed 's/^seam_//; s/_master$//' \
+        | sort -u | awk '/^side/ {print; next} {rest = rest " " $0} END {print rest}')
     mv 0 0.fields
-    for where in side up down; do
-        stitchMesh -overwrite "seam_far_$where" "seam_inner_$where" > "log.stitchMesh.$where" 2>&1 || {
+    for pair in $pairs; do
+        stitchMesh -overwrite "seam_${pair}_master" "seam_${pair}_slave" > "log.stitchMesh.$pair" 2>&1 || {
             rm -rf 0
             mv 0.fields 0
-            echo "error: stitchMesh failed for the $where seam; see log.stitchMesh.$where" >&2
+            echo "error: stitchMesh failed for the $pair seam; see log.stitchMesh.$pair" >&2
             exit 1
         }
     done
