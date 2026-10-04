@@ -280,6 +280,11 @@ stitch_gmsh_seams() {
     local pair pairs n
     pairs=$(grep -oE "seam_[a-z0-9_]+_master" constant/polyMesh/boundary | sed 's/^seam_//; s/_master$//' \
         | sort -u | awk '/^side|^core_side/ {print; next} {rest = rest " " $0} END {print rest}')
+    # toleranceDict is read from constant/
+    printf '%s\n' 'FoamFile { version 2.0; format ascii; class dictionary; object toleranceDict; }' \
+        'pointMergeTol 0.01;' 'edgeMergeTol 0.005;' 'nFacesPerSlaveEdge 5;' 'edgeFaceEscapeLimit 10;' \
+        'integralAdjTol 0.05;' 'edgeMasterCatchFraction 0.4;' 'edgeCoPlanarTol 0.8;' 'edgeEndCutoffTol 0.0001;' \
+        > constant/toleranceDict.tight
     mv 0 0.fields
     for pair in $pairs; do
         # Seams with identical nodes on both sides merge face for face
@@ -292,6 +297,11 @@ stitch_gmsh_seams() {
         elif stitchMesh -overwrite "seam_${pair}_master" "seam_${pair}_slave" \
                 > "log.stitchMesh.$pair.integral" 2>&1; then
             echo "stitched $pair (integral)"
+        elif stitchMesh -overwrite -toleranceDict toleranceDict.tight "seam_${pair}_master" "seam_${pair}_slave" \
+                > "log.stitchMesh.$pair.tight" 2>&1; then
+            # tighter point and edge merging: the default merges points of
+            # the skinny fan faces at a prism's collapsed corner (the tip cap's top)
+            echo "stitched $pair (integral, tight merge)"
         else
             rm -rf 0
             mv 0.fields 0
