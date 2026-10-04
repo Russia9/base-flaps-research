@@ -1432,6 +1432,25 @@ def edge_families(topo: Topo) -> Families:
         if g.startswith("seam_") and g.rsplit("_", 1)[1] in ("master", "slave"):
             pair, role = g[5:].rsplit("_", 1)
             by_pair.setdefault(pair, {}).setdefault(role, set()).update(topo.loops[f])
+    # Cylindrical seams: axial edges on the two sides spanning the same x
+    # range share a family (same axial nodes), also where the sides' block
+    # corners differ in phi (the core seam behind the base).
+    for pair, sides in by_pair.items():
+        if not (pair.startswith("side") or pair == "core_side"):
+            continue
+        spans: dict[str, dict[tuple, int]] = {}
+        for role, edges in sides.items():
+            for c in edges:
+                cv = topo.curves[c]
+                if topo.direction(c) != "axial":
+                    continue
+                x0, x1 = sorted((cv.p[0], cv.q[0]))
+                spans.setdefault(role, {}).setdefault((round(x0, 6), round(x1, 6), round(cv.rp, 6)), c)
+        for k, cm in spans.get("master", {}).items():
+            cs = spans.get("slave", {}).get(k)
+            if cs:
+                same = (topo.curves[cm].p[0] < topo.curves[cm].q[0]) == (topo.curves[cs].p[0] < topo.curves[cs].q[0])
+                fam.union(cm, cs, 1 if same else -1)
     for pair, sides in by_pair.items():
         # Only seams that need matching nodes link families: the cylindrical
         # ones (same circumferential nodes on both sides) and the tip caps
