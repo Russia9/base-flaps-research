@@ -282,12 +282,22 @@ stitch_gmsh_seams() {
         | sort -u | awk '/^side|^core_side/ {print; next} {rest = rest " " $0} END {print rest}')
     mv 0 0.fields
     for pair in $pairs; do
-        stitchMesh -overwrite "seam_${pair}_master" "seam_${pair}_slave" > "log.stitchMesh.$pair" 2>&1 || {
+        # Seams with identical nodes on both sides merge face for face
+        # (-perfect); the face cutting of the integral mode fails on their
+        # coincident points. Seams whose sides differ (the flat ones, the
+        # nose and body side) need the integral mode.
+        if stitchMesh -perfect -overwrite "seam_${pair}_master" "seam_${pair}_slave" \
+                > "log.stitchMesh.$pair" 2>&1; then
+            echo "stitched $pair (perfect)"
+        elif stitchMesh -overwrite "seam_${pair}_master" "seam_${pair}_slave" \
+                > "log.stitchMesh.$pair.integral" 2>&1; then
+            echo "stitched $pair (integral)"
+        else
             rm -rf 0
             mv 0.fields 0
-            echo "error: stitchMesh failed for the $pair seam; see log.stitchMesh.$pair" >&2
+            echo "error: stitchMesh failed for the $pair seam; see log.stitchMesh.$pair{,.integral}" >&2
             exit 1
-        }
+        fi
     done
     printf 'FoamFile { version 2.0; format ascii; class dictionary; object createPatchDict; }\npointSync false;\npatches ();\n' \
         > createPatchDict.removeEmpty
