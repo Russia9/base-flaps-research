@@ -38,7 +38,7 @@ xTipInterface -30;     // where the tip-patch interface reaches r = rZone
 coreWake      20;      // wake core half-width behind the base
 coreFar       60;      // far-zone core half-width upstream and downstream
 xWakeSplit    820;     // wake blocks split: near part | radially relaxing part (bare body)
-xSlabEnd      840;     // with fins: the fin slab runs xAftStart..xSlabEnd
+xSlabEnd      830;     // with fins: the fin slab runs xAftStart..xSlabEnd
 finWrap       6;       // wrap layer around each fin (mm)
 hFinChord     2.5;     // max axial cell along the fins
 hFinSpan      2.0;     // max cell along the span, the thickness and the cap (inside the wrap)
