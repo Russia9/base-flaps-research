@@ -411,6 +411,13 @@ def cap_tools(spec: FinSpec, P: dict, x1: float) -> list:
     fin0 = [dt for dt in occ.extrude([(1, mid)], x1 - z2, 0, 0) if dt[0] == 2]
     for b, Pc in (("bi", "Pm"), ("bo", "Pp")):
         fin0 += ruled(("line", (z2, *c[b]), (z2, *c[Pc])), ("arc", (z3, *c["e"]), (z3, *c["Q"]), (z3, *centre)))
+    # The base plane through the cap, as through the wrap layers beside it:
+    # its bottom, corner and front faces then match the slab's face for face
+    # (stitched as perfect matches, clear of the 3 um cells at the fin walls)
+    # and the trailing-edge prism chain runs on to the cap's top seam.
+    pts = [occ.addPoint(z3, *c[k]) for k in ("bi", "bo", "Pp", "Pm")]
+    fin0.append((2, occ.addPlaneSurface([occ.addCurveLoop([occ.addLine(pts[i], pts[(i + 1) % 4])
+                                                           for i in range(4)])])))
     tools = list(fin0)
     for k in range(1, spec.N):
         copy = occ.copy(fin0)
@@ -2204,7 +2211,7 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
     # is not split into blocks yet.
     if info["slab"]:
         n = info["fins_n"]
-        expected = {"nose": 20, "body": 16, "slab": 52 * n, "slab_core": 5, "cap": 4 * n, "wake": 20,
+        expected = {"nose": 20, "body": 16, "slab": 52 * n, "slab_core": 5, "cap": 6 * n, "wake": 20,
                     "far": 28, "far_slab": 32, "far_aft": 28}
     else:
         expected = {"nose": 20, "body": 16, "aft": 48, "far": 48}
