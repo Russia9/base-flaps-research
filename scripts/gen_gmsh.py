@@ -50,7 +50,7 @@ PARAMS = {
     "xWakeSplit": 820.0, "hRelax": 2.0, "hWakeRadial": 1.0, "firstLayerTip": 0.02,
     "xSlabEnd": 900.0, "finWrap": 6.0,
     # fin slab spacing (mm)
-    "hFinChord": 0.5, "hFinSpan": 0.5, "hSlabOuter": 2.0, "finSpanCut": -8.0,
+    "hFinChord": 2.0, "hFinSpan": 1.5, "hSlabOuter": 3.0, "finSpanCut": -8.0, "hLE": 0.2,
 }
 INTEGER = ("nTheta", "nLayers")
 
@@ -1472,6 +1472,16 @@ def edge_needs(topo: Topo, body: Body, P: dict, spec) -> dict[int, tuple]:
         return (spec.R_in - d - tol <= rho <= spec.R_out + d + tol
                 and ang <= spec.th_tip + d / spec.R_edge + tol)
 
+    def on_fin_edge(p, c):
+        """Vertex p on the fin's LE or TE edge (x = z0 or z3) and on a fin wall
+        face that edge c does not lie in (the wedges are too shallow for the
+        wall rule)."""
+        x = topo.xyz[p][0]
+        if not (abs(x - spec.z[0]) < 1e-6 or abs(x - spec.z[3]) < 1e-6):
+            return False
+        return any(topo.group_of.get(f) == "stabilizers" and c not in topo.loops[f]
+                   for f in topo.at_vertex.get(p, []))
+
     needs = {}
     for c, cv in topo.curves.items():
         zones = topo.edge_zones[c]
@@ -1522,6 +1532,8 @@ def edge_needs(topo: Topo, body: Body, P: dict, spec) -> dict[int, tuple]:
                     math.hypot(*topo.xyz[p][1:]) - r_z) < PAD else None)
             elif kind == "axial" and abs(x - body.l_ogive) < 1e-6 and not far:
                 cond = End(P["hShoulder"], q)
+            elif kind == "axial" and spec and on_fin_edge(p, c):
+                cond = End(P["hLE"], q)                     # chordwise at the LE/TE wedges
             conds.append(cond)
         needs[c] = (conds[0], conds[1], h)
     return needs
