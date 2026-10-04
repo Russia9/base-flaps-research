@@ -298,6 +298,7 @@ stitch_gmsh_seams() {
             echo "error: stitchMesh failed for the $pair seam; see log.stitchMesh.$pair{,.integral}" >&2
             exit 1
         fi
+        rm -rf 0   # stitchMesh writes 0/meshPhi, which the next stitch would read at the old size
     done
     printf 'FoamFile { version 2.0; format ascii; class dictionary; object createPatchDict; }\npointSync false;\npatches ();\n' \
         > createPatchDict.removeEmpty
