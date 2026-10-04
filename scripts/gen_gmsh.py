@@ -556,7 +556,7 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
             # Behind the base, r < R: its own zone, so the fin sectors' many
             # block corners on r = R stay out of the core (joined with
             # matching nodes on r = R).
-            pieces = [x_cylinder(x0, x1 - x0, R)]
+            pieces = [x_cylinder(x0, x1 - x0, R, [math.pi / 4 + k * math.pi / 2 for k in range(4)])]
         elif name == "slab":
             phi_w = spec.wrap_root(P["finWrap"], R)
             core = x_cylinder(total, x1 - total, R,
@@ -659,8 +659,10 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
 
     if slab:
         zones = others(1) | fragment(of_group(1), slab_tools(spec, P, slab, body))
-        core = ([half_plane(t, total, slab[1], 0.0, R) for t in thetas[0::2]]
-                + [half_plane(t, total, slab[1], SQ2 * s_w, R) for t in thetas[1::2]]
+        # One square and four ring blocks (corners at 45 + 90k deg): the
+        # square's opposite sides then match under the fins' 90-degree
+        # symmetry, and the ring arcs copy the slab's nodes on r = R.
+        core = ([half_plane(t, total, slab[1], SQ2 * s_w, R) for t in thetas[1::2]]
                 + [square_prism(total, s_w, slab[1], s_w)])
         zones = others(6) | fragment(of_group(6), core)
         zones = others(7) | fragment(of_group(7), cap_tools(spec, P, slab[1]))
@@ -885,7 +887,10 @@ class End:
         self.h, self.q, self.n_layers, self.q_layer = h, q, n_layers, q_layer
 
     def size(self, k: int) -> float:
-        return self.h * self.q_layer ** min(k, self.n_layers) * self.q ** max(0, k - self.n_layers)
+        try:
+            return self.h * self.q_layer ** min(k, self.n_layers) * self.q ** max(0, k - self.n_layers)
+        except OverflowError:
+            return math.inf
 
 
 def size_driven(length: float, a: End, b: End, hmax: float) -> list[float]:
@@ -1339,8 +1344,10 @@ class Topo:
 
     def normal_faces(self, c: int, p: int, keys) -> list[int]:
         """Faces in the groups `keys` at vertex p that edge c leaves at a steep
-        angle (|cos| > 0.5 between the edge and the face normal), excluding
-        faces the edge lies in."""
+        angle (|cos| > 0.8 between the edge and the face normal, within 37
+        deg of the normal), excluding faces the edge lies in. A 45-degree
+        wedge apex (the fin LE/TE) is not steep: stacks along the wedge
+        into its apex fold the cells there."""
         out, t = [], self.tangent(c, p)
         for f in self.at_vertex.get(p, []):
             key = self.group_of.get(f, "")
@@ -1348,7 +1355,7 @@ class Topo:
                 continue
             uv = gmsh.model.getParametrization(2, f, self.xyz[p])
             n = gmsh.model.getNormal(f, uv)
-            if abs(sum(n[i] * t[i] for i in range(3))) > 0.5:
+            if abs(sum(n[i] * t[i] for i in range(3))) > 0.8:
                 out.append(f)
         return out
 
@@ -1482,6 +1489,57 @@ def edge_needs(topo: Topo, body: Body, P: dict, spec) -> dict[int, tuple]:
         return any(topo.group_of.get(f) == "stabilizers" and c not in topo.loops[f]
                    for f in topo.at_vertex.get(p, []))
 
+    def on_te_line(p):
+        """Vertex p on a fin trailing edge's downstream line (fin frame:
+        R_edge, between the root and the tip)."""
+        _, y, z = topo.xyz[p]
+        k = round(math.atan2(z, y) / (2 * math.pi / spec.N))
+        a = -k * 2 * math.pi / spec.N
+        y, z = y * math.cos(a) - z * math.sin(a), y * math.sin(a) + z * math.cos(a)
+        rho = math.hypot(y - spec.Yc, z - spec.Zc)
+        return abs(rho - spec.R_edge) < 1e-6 and math.atan2(y - spec.Yc, z - spec.Zc) <= spec.th_tip + 1e-6
+
+    def on_te_surface(pt):
+        _, y, z = pt
+        k = round(math.atan2(z, y) / (2 * math.pi / spec.N))
+        a = -k * 2 * math.pi / spec.N
+        y, z = y * math.cos(a) - z * math.sin(a), y * math.sin(a) + z * math.cos(a)
+        return abs(math.hypot(y - spec.Yc, z - spec.Zc) - spec.R_edge) < 1e-4
+
+    # Graded faces: walls, the base rim's shear layer (r = R behind the base)
+    # and a fin trailing edge's wake surface (R_edge behind the TE). In a
+    # block with such a face, the edges running from it to the opposite face
+    # get its grading at that end, at any angle, so every edge across the
+    # block's layer is graded alike.
+    def face_kind(f):
+        if topo.group_of.get(f) in WALLS:
+            return "wall"
+        bb = gmsh.model.getBoundingBox(2, f)
+        if bb[0] < total - PAD:
+            return None
+        if _on_cylinder(f, R):
+            return "shear"
+        if spec and bb[0] > spec.z[3] - PAD:
+            (u0, v0), (u1, v1) = gmsh.model.getParametrizationBounds(2, f)
+            pts = gmsh.model.getValue(2, f, [u0, v0, u1, v1, 0.5 * (u0 + u1), 0.5 * (v0 + v1)])
+            if all(on_te_surface(pts[i:i + 3]) for i in range(0, 9, 3)):
+                return "te"
+        return None
+
+    from_face: dict[tuple[int, int], str] = {}
+    kinds = {f: face_kind(f) for f in topo.face_zones}
+    for v in topo.info["zones"]:
+        faces = [f for _, f in gmsh.model.getBoundary([(3, v)], oriented=False)]
+        block_edges = {c for f in faces for c in topo.loops[f]}
+        for f in faces:
+            if not kinds[f]:
+                continue
+            corners = {p for c in topo.loops[f] for p in topo.ends[c]}
+            for c in block_edges - set(topo.loops[f]):
+                on = [p for p in topo.ends[c] if p in corners]
+                if len(on) == 1 and (c, on[0]) not in from_face:
+                    from_face[(c, on[0])] = kinds[f]
+
     needs = {}
     for c, cv in topo.curves.items():
         zones = topo.edge_zones[c]
@@ -1502,6 +1560,8 @@ def edge_needs(topo: Topo, body: Body, P: dict, spec) -> dict[int, tuple]:
                 h_ax = P["hOgive"]
             elif fin_x and fin_x[0] <= xm <= fin_x[1] and rm < r_tip:
                 h_ax = P["hFinChord"]
+            elif slabby and max(cv.rp, cv.rq) > R + 1e-6:
+                h_ax = P["hSlabOuter"]                      # slab, away from the fins and the body
             elif xm < total:
                 h_ax = P["hWall"]
             else:
@@ -1525,8 +1585,13 @@ def edge_needs(topo: Topo, body: Body, P: dict, spec) -> dict[int, tuple]:
         for p in topo.ends[c]:
             x = topo.xyz[p][0]
             cond = None
-            if topo.normal_faces(c, p, WALLS):
+            via = from_face.get((c, p))
+            if via == "wall" or topo.normal_faces(c, p, WALLS):
                 cond = tip if x < x45 + 1e-6 else wall
+            elif via == "shear":
+                cond = wall if x <= P["xWakeSplit"] + 1e-6 else End(P["hWakeRadial"], q)
+            elif via == "te":
+                cond = End(P["hLE"], q)
             elif topo.normal_faces(c, p, ("seam_",)):
                 cond = End(P["hSeam"], q) if far else (End(P["hRingOut"], q) if abs(
                     math.hypot(*topo.xyz[p][1:]) - r_z) < PAD else None)
@@ -1534,8 +1599,55 @@ def edge_needs(topo: Topo, body: Body, P: dict, spec) -> dict[int, tuple]:
                 cond = End(P["hShoulder"], q)
             elif kind == "axial" and spec and on_fin_edge(p, c):
                 cond = End(P["hLE"], q)                     # chordwise at the LE/TE wedges
+            elif kind != "axial" and x > total + 1e-6 and abs(math.hypot(*topo.xyz[p][1:]) - R) < 1e-6:
+                # the base rim's shear layer, carried downstream on r = R
+                cond = wall if x <= P["xWakeSplit"] + 1e-6 else End(P["hWakeRadial"], q)
+            elif kind != "axial" and spec and x > total + 1e-6 and on_te_line(p):
+                cond = End(P["hLE"], q)                     # the fin trailing edge's wake
             conds.append(cond)
         needs[c] = (conds[0], conds[1], h)
+
+    # Face-consistent wall stacks: if one edge running from a block face has
+    # the wall stack at that face (e.g. the fin tip reached along a fin
+    # wall), the other edges from that face in the block take it too. Only
+    # across faces that border a wall (an edge in a wall face), so the stacks
+    # do not spread out from wall corners into the free flow.
+    wall_edges = {c for f, k in kinds.items() if k == "wall" for c in topo.loops[f]}
+    connecting: list[list[tuple[int, int]]] = []
+    for v in topo.info["zones"]:
+        faces = [f for _, f in gmsh.model.getBoundary([(3, v)], oriented=False)]
+        block_edges = {c for f in faces for c in topo.loops[f]}
+        for f in faces:
+            if not set(topo.loops[f]) & wall_edges:
+                continue
+            corners = {p for c in topo.loops[f] for p in topo.ends[c]}
+            group = []
+            for c in block_edges - set(topo.loops[f]):
+                on = [p for p in topo.ends[c] if p in corners]
+                if len(on) == 1:
+                    group.append((c, on[0]))
+            connecting.append(group)
+
+    def at(c, p):
+        return needs[c][0] if p == topo.ends[c][0] else needs[c][1]
+
+    def put(c, p, cond):
+        a, b, _ = needs[c]
+        needs[c] = (cond, b, h) if p == topo.ends[c][0] else (a, cond, h)
+
+    changed = True
+    while changed:
+        changed = False
+        for group in connecting:
+            stacked = [at(c, p) for c, p in group if at(c, p) is not None and at(c, p).n_layers]
+            if not stacked:
+                continue
+            best = min(stacked, key=lambda e: e.h)
+            for c, p in group:
+                cur = at(c, p)
+                if cur is None or not cur.n_layers:
+                    put(c, p, best)
+                    changed = True
     return needs
 
 
@@ -1574,12 +1686,264 @@ def block_cells(topo: Topo, fam: Families, counts: dict) -> dict[str, int]:
     return cells
 
 
-def budget(body: Body, P: dict, info: dict, spec) -> list[str]:
-    """F5a: edge families, their counts and the cells per zone, no meshing."""
+def stronger(a, b):
+    """The end condition with the smaller first cell (a wall stack wins ties)."""
+    if a is None or b is None:
+        return a or b
+    if abs(a.h - b.h) > 1e-12:
+        return a if a.h < b.h else b
+    return a if a.n_layers >= b.n_layers else b
+
+
+def two_sided(L: float, n: int, a, b) -> tuple[list[float], bool]:
+    """n cell sizes over L from the start condition a to the end condition b
+    (End or None for free). Returns the sizes and whether both conditions
+    were met (False: too few cells, wall stacks were merged)."""
+    if a is None and b is None:
+        return [L / n] * n, True
+    if b is None:
+        return fixed_n(L, n, a), True
+    if a is None:
+        return fixed_n(L, n, None, b), True
+    lo, hi = min(a.h, b.h, L), L                   # a cap below the first cells means nothing
+    if len(size_driven(L, a, b, lo)) < n:          # very short edge: split its largest cells
+        sz = size_driven(L, a, b, lo)
+        while len(sz) < n:
+            i = max(range(len(sz)), key=sz.__getitem__)
+            sz[i:i + 1] = [sz[i] / 2] * 2
+        return sz, True
+    for _ in range(100):
+        mid = math.sqrt(lo * hi)
+        if len(size_driven(L, a, b, mid)) > n:
+            lo = mid
+        else:
+            hi = mid
+    sz = size_driven(L, a, b, hi)
+    if len(sz) == n:
+        return sz, True
+    sz = size_driven(L, a, b, lo)                   # one or two cells too many: merge in the middle
+    ok = True
+    while len(sz) > n:
+        la, lb = min(a.n_layers, len(sz) // 2), min(b.n_layers, len(sz) // 2)
+        rng = range(la, len(sz) - lb - 1)
+        if not rng:
+            rng, ok = range(len(sz) - 1), False
+        i = min(rng, key=lambda k: sz[k] + sz[k + 1])
+        sz[i:i + 2] = [sz[i] + sz[i + 1]]
+    return sz, ok
+
+
+def seam_stations(topo: Topo) -> list[dict]:
+    """The circumferential arcs on each cylindrical seam, grouped by station
+    (x, r) and seam side, with their phi ranges."""
+    by: dict[tuple, dict] = {}
+    for f, g in ((f, topo.group_of.get(f, "")) for f in topo.face_zones):
+        if not g.startswith(("seam_side", "seam_core_side")):
+            continue
+        pair, role = g[5:].rsplit("_", 1)
+        for c in topo.loops[f]:
+            if topo.direction(c) != "circ":
+                continue
+            cv = topo.curves[c]
+            key = (pair, round(cv.p[0], 6), round(cv.rp, 6))
+            p0 = math.atan2(cv.p[2], cv.p[1])
+            p1 = p0 + math.atan2(math.sin(math.atan2(cv.q[2], cv.q[1]) - p0),
+                                 math.cos(math.atan2(cv.q[2], cv.q[1]) - p0))
+            by.setdefault(key, {"master": {}, "slave": {}})[role][c] = (p0, p1)
+    return [{"key": k, **v} for k, v in by.items()]
+
+
+def generic_spacing(body: Body, P: dict, info: dict, spec) -> dict:
+    """Cell sizes on every block edge (F5b): family counts, per-edge
+    distributions from the end conditions (axial families share theirs),
+    and node positions copied across the cylindrical seams."""
     topo = Topo(info)
     fam = edge_families(topo)
     needs = edge_needs(topo, body, P, spec)
-    counts = family_counts(topo, fam, needs)
+    groups = fam.groups()
+    ends: dict[int, tuple] = {}
+    for root, members in groups.items():
+        if all(topo.direction(c) == "axial" for c in members):
+            A = B = None
+            for c in members:
+                a, b, _ = needs[c]
+                s = fam.find(c)[1]
+                ra, rb = (a, b) if s == 1 else (b, a)
+                A, B = stronger(A, ra), stronger(B, rb)
+            for c in members:
+                ends[c] = (A, B) if fam.find(c)[1] == 1 else (B, A)
+        else:
+            for c in members:
+                ends[c] = needs[c][:2]
+    counts = {}
+    for root, members in groups.items():
+        n = 1
+        for c in members:
+            a, b = ends[c]
+            h = needs[c][2]
+            n = max(n, len(size_driven(topo.curves[c].length, a or End(h), b or End(h), h)))
+        counts[root] = n
+
+    # Cylindrical seams whose arcs do not coincide: the side with more arcs
+    # at a station is the source; a target arc spanning several source arcs
+    # takes their cell count and node positions, and a target corner inside
+    # a source arc forces a node there.
+    targets: dict[int, list[tuple]] = {}       # target arc -> [(source arc, phi range)] in phi order
+    forced: dict[int, list[float]] = {}        # source arc -> phis that must be nodes
+    for st in seam_stations(topo):
+        sides = sorted((st["master"], st["slave"]), key=len)
+        tgt, src = sides
+        if not tgt or not src:
+            continue
+        for c, (t0, t1) in tgt.items():
+            lo, hi = min(t0, t1), max(t0, t1)
+            inside = []
+            for e, (s0, s1) in src.items():
+                a0, a1 = min(s0, s1), max(s0, s1)
+                for shift in (0.0, 2 * math.pi, -2 * math.pi):
+                    b0, b1 = a0 + shift, a1 + shift
+                    if b1 > lo + 1e-9 and b0 < hi - 1e-9:
+                        inside.append((e, b0, b1))
+                        for phi in (lo, hi):
+                            if b0 + 1e-9 < phi < b1 - 1e-9:
+                                forced.setdefault(e, []).append(phi - shift)
+                        break
+            if len(inside) == 1 and abs(inside[0][1] - lo) < 1e-9 and abs(inside[0][2] - hi) < 1e-9:
+                continue                                    # coincident: same family already
+            targets[c] = (lo, hi, sorted(inside, key=lambda t: t[1]))
+
+    def dist(c, n):
+        """A free end takes the edge's size cap, so growth from a stack or a
+        seam size stops at the cap instead of running on geometrically."""
+        a, b = ends[c]
+        h = needs[c][2]
+        if a is None and b is None:
+            return two_sided(topo.curves[c].length, n, None, None)
+        return two_sided(topo.curves[c].length, n, a or End(h), b or End(h))
+
+    sizes, short = {}, []
+    for root, members in groups.items():
+        for c in members:
+            sizes[c], ok = dist(c, counts[root])
+            if not ok:
+                short.append(c)
+
+    def phis(c):
+        """Node angles along arc c, in its parametric order, from its sizes."""
+        cv = topo.curves[c]
+        p0 = math.atan2(cv.p[2], cv.p[1])
+        p1 = p0 + math.atan2(math.sin(math.atan2(cv.q[2], cv.q[1]) - p0), math.cos(math.atan2(cv.q[2], cv.q[1]) - p0))
+        out, acc = [p0], 0.0
+        for x in sizes[c]:
+            acc += x
+            out.append(p0 + (p1 - p0) * acc / cv.length)
+        return out
+
+    def set_phis(c, ph):
+        cv = topo.curves[c]
+        sz = [abs(ph[i + 1] - ph[i]) for i in range(len(ph) - 1)]
+        tot = sum(sz)
+        sizes[c] = [x * cv.length / tot for x in sz]
+
+    for e, fs in forced.items():                        # snap the nearest nodes onto forced corners
+        ph = phis(e)
+        for phi in fs:
+            i = min(range(1, len(ph) - 1), key=lambda k: abs(ph[k] - phi))
+            old = ph[i]
+            for k in range(1, len(ph) - 1):             # stretch each side linearly
+                if k <= i:
+                    ph[k] = ph[0] + (ph[k] - ph[0]) * (phi - ph[0]) / (old - ph[0])
+                else:
+                    ph[k] = phi + (ph[k] - old) * (ph[-1] - phi) / (ph[-1] - old)
+            ph[i] = phi
+        set_phis(e, ph)
+    for c, (lo, hi, chain) in targets.items():
+        cv = topo.curves[c]
+        p0 = math.atan2(cv.p[2], cv.p[1])
+        nodes = set()                                   # source nodes within the target's own range
+        for e, b0, b1 in chain:
+            shift = b0 - min(phis(e)[0], phis(e)[-1])
+            for ph in phis(e):
+                x = ph + shift
+                if lo - 1e-9 <= x <= hi + 1e-9:
+                    nodes.add(round(x, 12))
+        ph = sorted(nodes)
+        def gap(a, b):
+            return abs(math.atan2(math.sin(a - b), math.cos(a - b)))
+        if gap(ph[0], p0) > gap(ph[-1], p0):            # the target runs from its high end
+            ph = ph[::-1]
+        root = fam.find(c)[0]
+        n = len(ph) - 1
+        if counts[root] != n:                           # the target's whole family takes the count
+            counts[root] = n
+            for m in groups[root]:
+                sizes[m], _ = dist(m, n)
+        set_phis(c, ph)
+    return {"topo": topo, "fam": fam, "counts": counts, "sizes": sizes, "ends": ends,
+            "targets": targets, "forced": forced, "short": short}
+
+
+def generic_mesh(body: Body, P: dict, info: dict, spec, out: Path, convert: bool) -> list[str]:
+    """F5b/F6: mesh every block edge with its generic spacing, then the faces
+    and blocks, and write the volume mesh (see write_case)."""
+    gs = generic_spacing(body, P, info, spec)
+    topo, sizes, counts, fam = gs["topo"], gs["sizes"], gs["counts"], gs["fam"]
+    n_forced = sum(len(v) for v in gs["forced"].values())
+    lines = [(f"  {len(topo.curves)} block edges, {len(counts)} families, {len(gs['targets'])} seam arcs copied, "
+              f"{n_forced} forced nodes, {len(gs['short'])} edges too short for both wall stacks")]
+    bad = 0
+    for f in topo.loops:
+        _, edges, _ = topo.cycle(f)
+        if len(edges) == 4 and (len(sizes[edges[0]]) != len(sizes[edges[2]])
+                                or len(sizes[edges[1]]) != len(sizes[edges[3]])):
+            bad += 1
+    lines.append(f"  faces with unequal opposite counts: {bad}  {'ok' if not bad else 'FAIL'}")
+    cells = block_cells(topo, fam, counts)
+    lines.append(f"  estimated cells: {sum(cells.values()) / 1e6:.3f} M")
+    wall_first = [sz[0] if e[0] and e[0].n_layers else sz[-1]
+                  for c, sz in sizes.items() for e in [gs["ends"][c]] if (e[0] and e[0].n_layers) or (e[1] and e[1].n_layers)]
+    if wall_first:
+        lines.append(f"  first wall cell: min {min(wall_first) * 1e3:.2f} um, max {max(wall_first) * 1e3:.2f} um "
+                     f"(target {P['firstLayer'] * 1e3:.1f} um)")
+    for c, sz in sizes.items():
+        gmsh.model.mesh.setTransfiniteCurve(c, len(sz) + 1)
+    set_transfinite_blocks(info)
+    gmsh.model.mesh.generate(1)
+    for c, sz in sizes.items():                         # move every curve's nodes to its sizes
+        cv = topo.curves[c]
+        tags, _, u = gmsh.model.mesh.getNodes(1, c, includeBoundary=False, returnParametricCoord=True)
+        order = sorted(range(len(tags)), key=lambda i: u[i])
+        if cv.u[-1] < cv.u[0]:
+            order = order[::-1]
+        s, total = 0.0, sum(sz)
+        for k, i in enumerate(order):
+            s += sz[k]
+            uu = cv.u_at(s * cv.length / total)
+            gmsh.model.mesh.setNode(tags[i], gmsh.model.getValue(1, c, [uu]), [uu])
+    # seam check: the copied arcs' nodes against their sources'
+    worst = 0.0
+    for c, (_, _, chain) in gs["targets"].items():
+        tn = gmsh.model.mesh.getNodes(1, c, includeBoundary=True)[1]
+        tp = [tn[3 * i:3 * i + 3] for i in range(len(tn) // 3)]
+        sp = []
+        for e, _, _ in chain:
+            en = gmsh.model.mesh.getNodes(1, e, includeBoundary=True)[1]
+            sp += [en[3 * i:3 * i + 3] for i in range(len(en) // 3)]
+        for p in tp:
+            worst = max(worst, min(math.dist(p, q) for q in sp))
+    lines.append(f"  copied seam nodes: max distance to a source node {worst:.2e} mm  "
+                 f"{'ok' if worst < 1e-6 else 'FAIL'}")
+    gmsh.option.setNumber("Mesh.MeshOnlyEmpty", 1)
+    gmsh.model.mesh.generate(3)
+    lines.append("  " + write_case(info, out, convert))
+    return lines
+
+
+def budget(body: Body, P: dict, info: dict, spec) -> list[str]:
+    """F5a: edge families, their counts and the cells per zone, no meshing."""
+    gs = generic_spacing(body, P, info, spec)
+    topo, fam, counts = gs["topo"], gs["fam"], gs["counts"]
+    needs = edge_needs(topo, body, P, spec)
     cells = block_cells(topo, fam, counts)
     lines = [f"  {len(topo.curves)} block edges in {len(counts)} families; {len(fam.conflicts)} orientation conflicts"]
     for a, b in fam.conflicts[:5]:
@@ -1594,7 +1958,9 @@ def budget(body: Body, P: dict, info: dict, spec) -> list[str]:
     for root, n in top:
         c = max(groups[root], key=lambda e: topo.curves[e].length)
         cv = topo.curves[c]
-        lines.append(f"    {n:5d} x{len(groups[root]):4d}  {topo.direction(c):7s} "
+        a, b, _ = needs[c]
+        lab = "".join("W" if e is not None and e.n_layers else ("h" if e is not None else "-") for e in (a, b))
+        lines.append(f"    {n:5d} x{len(groups[root]):4d} {lab} {topo.direction(c):7s} "
                      f"{','.join(sorted(topo.edge_zones[c]))[:28]:28s} "
                      f"({cv.p[0]:.1f}, r {cv.rp:.1f}) -> ({cv.q[0]:.1f}, r {cv.rq:.1f})")
     return lines
@@ -1813,7 +2179,7 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
     # is not split into blocks yet.
     if info["slab"]:
         n = info["fins_n"]
-        expected = {"nose": 20, "body": 16, "slab": 52 * n, "slab_core": 12, "cap": 4 * n, "wake": 20,
+        expected = {"nose": 20, "body": 16, "slab": 52 * n, "slab_core": 5, "cap": 4 * n, "wake": 20,
                     "far": 28, "far_slab": 8, "far_aft": 28}
     else:
         expected = {"nose": 20, "body": 16, "aft": 48, "far": 48}
@@ -2028,17 +2394,9 @@ def prism_corners(v: int) -> list[int]:
     return bottom + top
 
 
-def preview_mesh(info: dict, out: Path, n: int) -> str:
-    """The block layout as a coarse mesh: n cells along every block edge, so
-    each block shows as an n x n x n lattice (prisms where a block is one).
-    Equal counts satisfy every transfinite constraint, so no spacing is
-    needed. Writes out/mesh.msh and, when gmshToFoam is on PATH, converts it
-    into the OpenFOAM case out/ (case.foam for ParaView: one cell zone per
-    mesh zone, every seam left as its own unstitched patch) and runs
-    checkMesh there."""
-    for _, c in gmsh.model.getEntities(1):
-        if Curve(c).length > 1e-9:                     # not OCC's pole edge at the apex
-            gmsh.model.mesh.setTransfiniteCurve(c, n + 1)
+def set_transfinite_blocks(info: dict):
+    """Transfinite quads on every face and hexahedra/prisms in every block
+    (the curves must be set already)."""
     for _, f in gmsh.model.getEntities(2):
         loop = [c for _, c in real_edges((2, f))]
         corners = []
@@ -2057,7 +2415,13 @@ def preview_mesh(info: dict, out: Path, n: int) -> str:
         corners = prism_corners(v) or hex_corners(v)
         gmsh.model.mesh.setTransfiniteVolume(v, cornerTags=corners)
         gmsh.model.mesh.setRecombine(3, v)
-    gmsh.model.mesh.generate(3)
+
+
+def write_case(info: dict, out: Path, convert: bool = True) -> str:
+    """Write the volume mesh as out/mesh.msh (MSH 2.2, one cell zone per mesh
+    zone, shared faces dropped) and, with convert and gmshToFoam on PATH,
+    turn out/ into an OpenFOAM case (case.foam for ParaView, every seam its
+    own unstitched patch) and run checkMesh there."""
     counts = {}
     for v in info["zones"]:
         for et, tags, _ in zip(*gmsh.model.mesh.getElements(3, v)):
@@ -2072,6 +2436,8 @@ def preview_mesh(info: dict, out: Path, n: int) -> str:
     gmsh.option.setNumber("Mesh.SaveAll", 0)
     gmsh.write(str(out / "mesh.msh"))
     summary = f"{sum(counts.values())} cells {counts}, wrote {out / 'mesh.msh'}"
+    if not convert:
+        return summary
     if not shutil.which("gmshToFoam"):
         return summary + "; gmshToFoam not on PATH, so no OpenFOAM case"
     (out / "system").mkdir(exist_ok=True)
@@ -2088,6 +2454,19 @@ def preview_mesh(info: dict, out: Path, n: int) -> str:
     flags = [ln.strip() for ln in text.splitlines() if ln.strip().startswith("***")]
     verdict = "Mesh OK" if "Mesh OK" in text else "; ".join(flags) or "checkMesh failed, see log.checkMesh"
     return summary + f"; OpenFOAM case {out / 'case.foam'}; checkMesh: {verdict}"
+
+
+def preview_mesh(info: dict, out: Path, n: int) -> str:
+    """The block layout as a coarse mesh: n cells along every block edge, so
+    each block shows as an n x n x n lattice (prisms where a block is one).
+    Equal counts satisfy every transfinite constraint, so no spacing is
+    needed."""
+    for _, c in gmsh.model.getEntities(1):
+        if Curve(c).length > 1e-9:                     # not OCC's pole edge at the apex
+            gmsh.model.mesh.setTransfiniteCurve(c, n + 1)
+    set_transfinite_blocks(info)
+    gmsh.model.mesh.generate(3)
+    return write_case(info, out)
 
 
 def write_vtk(path: Path, info: dict) -> tuple[dict[str, int], dict[str, int]]:
@@ -2147,6 +2526,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--gui", action="store_true", help="open the result in the Gmsh GUI")
     ap.add_argument("--geometry-only", action="store_true",
                     help="stop after the block layout and write a coarse preview mesh to <case>/preview")
+    ap.add_argument("--generic", action="store_true",
+                    help="mesh with the generic spacing engine and write the volume mesh to <case>/preview "
+                         "(the finned case always uses it)")
     ap.add_argument("--budget", action="store_true",
                     help="after the block checks, print edge families and cells per zone (step F5a)")
     ap.add_argument("--preview-cells", type=int, default=4, metavar="N",
@@ -2160,7 +2542,7 @@ def main(argv: list[str]) -> int:
         props = (case / "constant" / "caseProperties").read_text()
         D = parse_scalar(props, "D")
         N = int(parse_scalar(props, "N"))
-        if N != 0 and not (args.fins or args.geometry_only or args.budget):
+        if N != 0 and not (args.fins or args.geometry_only or args.budget or args.generic or args.volume):
             raise ValueError(f"N = {N}: with fins only --fins and --geometry-only work so far")
         params = read_params(case)
     except (OSError, ValueError) as exc:
@@ -2202,6 +2584,13 @@ def main(argv: list[str]) -> int:
         if args.budget:
             print("budget:")
             print("\n".join(budget(body, params, info, spec)))
+            return 0
+        if args.generic or (args.volume and spec):
+            # The generic engine: always for fins; --volume writes <case>/mesh.msh
+            # for rebuild-mesh.sh, otherwise a converted preview case.
+            print("generic mesh:")
+            out = case if args.volume else case / "preview"
+            print("\n".join(generic_mesh(body, params, info, spec, out, convert=not args.volume)))
             return 0
         if args.geometry_only:
             out = preview_mesh(info, case / "preview", args.preview_cells)
