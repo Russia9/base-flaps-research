@@ -668,7 +668,13 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
         zones = others(7) | fragment(of_group(7), cap_tools(spec, P, slab[1]))
         zones = others(2) | fragment(of_group(2), wake_tools(slab[1], xs[3]))
         for g, (x0, x1) in ((3, (x_in, slab[0])), (4, slab), (5, (slab[1], x_out))):
-            zones = others(g) | fragment(of_group(g), far_tools(x0, x1))
+            tools_g = far_tools(x0, x1)
+            if g == 4:
+                # The slab's x-stations, so the far slab's axial lines on
+                # r = rZone match the slab's segments and the seam's nodes
+                # coincide (stitched as a perfect match).
+                tools_g += [annulus(xp, r_z, r_ff) for xp in (spec.z[1], spec.z[2], total)]
+            zones = others(g) | fragment(of_group(g), tools_g)
     else:
         zones = others(1) | fragment(of_group(1), far_tools(x_in, x_out))
 
@@ -2199,7 +2205,7 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
     if info["slab"]:
         n = info["fins_n"]
         expected = {"nose": 20, "body": 16, "slab": 52 * n, "slab_core": 5, "cap": 4 * n, "wake": 20,
-                    "far": 28, "far_slab": 8, "far_aft": 28}
+                    "far": 28, "far_slab": 32, "far_aft": 28}
     else:
         expected = {"nose": 20, "body": 16, "aft": 48, "far": 48}
     for name, want in expected.items():
