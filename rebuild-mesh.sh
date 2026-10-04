@@ -262,6 +262,9 @@ build_gmsh_mesh() {
     gmshToFoam mesh.msh 2>&1 | tee log.gmshToFoam
     transformPoints -scale 0.001 2>&1 | tee log.transformPoints   # Gmsh works in mm
     foamDictionary constant/polyMesh/boundary -entry entry0/fuselage/type -set wall >/dev/null
+    if grep -q "^ *stabilizers$" constant/polyMesh/boundary; then
+        foamDictionary constant/polyMesh/boundary -entry entry0/stabilizers/type -set wall >/dev/null
+    fi
     rm -f mesh.msh
     stitch_gmsh_seams
     decomposePar -force
@@ -271,12 +274,12 @@ build_gmsh_mesh() {
 # smooth seam piece seam_<pair>_master / seam_<pair>_slave (the master is the
 # coarser side); each pair is stitched on its own, since across the 90-degree
 # edges between a cylinder and a disk stitchMesh's projection fails.
-# Cylindrical pairs go first. stitchMesh and createPatch read the fields,
+# Cylindrical pairs (side*, core_side) go first. stitchMesh and createPatch read the fields,
 # which have no seam entries, so 0/ is moved aside meanwhile.
 stitch_gmsh_seams() {
     local pair pairs n
-    pairs=$(grep -oE "seam_[a-z_]+_master" constant/polyMesh/boundary | sed 's/^seam_//; s/_master$//' \
-        | sort -u | awk '/^side/ {print; next} {rest = rest " " $0} END {print rest}')
+    pairs=$(grep -oE "seam_[a-z0-9_]+_master" constant/polyMesh/boundary | sed 's/^seam_//; s/_master$//' \
+        | sort -u | awk '/^side|^core_side/ {print; next} {rest = rest " " $0} END {print rest}')
     mv 0 0.fields
     for pair in $pairs; do
         stitchMesh -overwrite "seam_${pair}_master" "seam_${pair}_slave" > "log.stitchMesh.$pair" 2>&1 || {
