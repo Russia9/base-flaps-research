@@ -48,7 +48,7 @@ PARAMS = {
     "hUpstream": 2.0, "hOgive": 1.0, "hShoulder": 0.5, "hWall": 2.0, "hRingOut": 4.0,
     "hWake": 4.0, "hSeam": 4.0, "hFarMid": 8.0, "hFar": 30.0,
     "xWakeSplit": 820.0, "hRelax": 2.0, "hWakeRadial": 1.0, "firstLayerTip": 0.02,
-    "xSlabEnd": 900.0,
+    "xSlabEnd": 900.0, "finWrap": 6.0,
 }
 INTEGER = ("nTheta", "nLayers")
 
@@ -105,25 +105,28 @@ SQ2 = math.sqrt(2.0)
 PAD = 1e-3   # OCC pads bounding boxes slightly
 
 
-def x_cylinder(x0: float, dx: float, r: float) -> tuple[int, int]:
+def x_cylinder(x0: float, dx: float, r: float, angles: list[float] | None = None) -> tuple[int, int]:
     """Cylinder along x whose curved surface is eight 45-degree patches.
 
     A single occ.addCylinder has one periodic face with its parameter seam on
     a sector boundary, and structured faces that end on the seam fold (Gmsh
     picks the wrong parameter, 0 or 2 pi, at the seam corner). Here each
     sector's patch is a separate revolved, non-periodic face; the patches and
-    the two end disks are sewn into one solid.
+    the two end disks are sewn into one solid. `angles` (rad, increasing)
+    moves the patch edges, e.g. off the fin roots.
     """
     occ = gmsh.model.occ
+    a = angles or [k * math.pi / 4 for k in range(8)]
+    a = a + [a[0] + 2 * math.pi]
     faces = []
-    for k in range(8):
+    for k in range(len(a) - 1):
         line = occ.addLine(occ.addPoint(x0, r, 0), occ.addPoint(x0 + dx, r, 0))
-        occ.rotate([(1, line)], 0, 0, 0, 1, 0, 0, k * math.pi / 4)
-        faces += [t for d, t in occ.revolve([(1, line)], 0, 0, 0, 1, 0, 0, math.pi / 4) if d == 2]
+        occ.rotate([(1, line)], 0, 0, 0, 1, 0, 0, a[k])
+        faces += [t for d, t in occ.revolve([(1, line)], 0, 0, 0, 1, 0, 0, a[k + 1] - a[k]) if d == 2]
     for x in (x0, x0 + dx):
         c = occ.addPoint(x, 0, 0)
-        p = [occ.addPoint(x, r * math.cos(k * math.pi / 4), r * math.sin(k * math.pi / 4)) for k in range(8)]
-        arcs = [occ.addCircleArc(p[k], c, p[(k + 1) % 8]) for k in range(8)]
+        p = [occ.addPoint(x, r * math.cos(t), r * math.sin(t)) for t in a[:-1]]
+        arcs = [occ.addCircleArc(p[k], c, p[(k + 1) % len(p)]) for k in range(len(p))]
         faces.append(occ.addPlaneSurface([occ.addCurveLoop(arcs)]))
         occ.remove([(0, c)])
     return (3, occ.addVolume([occ.addSurfaceLoop(faces, sewing=True)]))
@@ -137,13 +140,21 @@ def half_plane(theta: float, x0: float, x1: float, r0: float, r1: float):
     return (2, s)
 
 
-def annulus(x: float, r0: float, r1: float):
-    """Disk (r0 = 0) or annulus in the plane x = const."""
+def annulus(x: float, r0: float, r1: float, seam: float = -math.pi / 2, seam_in: float | None = None):
+    """Disk (r0 = 0) or annulus in the plane x = const, the outer circle's
+    seam vertex at phi = seam and the inner one's at seam_in (rad, default
+    seam)."""
     occ = gmsh.model.occ
-    d = occ.addDisk(0, 0, 0, r1, r1)
+
+    def disk(r, phi):
+        d = occ.addDisk(0, 0, 0, r, r)
+        occ.rotate([(2, d)], 0, 0, 0, 0, 1, 0, math.pi / 2)
+        occ.rotate([(2, d)], 0, 0, 0, 1, 0, 0, phi + math.pi / 2)
+        return d
+
+    d = disk(r1, seam)
     if r0 > 0:
-        (_, d), = occ.cut([(2, d)], [(2, occ.addDisk(0, 0, 0, r0, r0))])[0]
-    occ.rotate([(2, d)], 0, 0, 0, 0, 1, 0, math.pi / 2)
+        (_, d), = occ.cut([(2, d)], [(2, disk(r0, seam if seam_in is None else seam_in))])[0]
     occ.translate([(2, d)], x, 0, 0)
     return (2, d)
 
@@ -196,6 +207,243 @@ def fragment(zones: dict[int, str], tools: list) -> dict[int, str]:
     return new
 
 
+def slab_tools(spec: FinSpec, P: dict, slab: tuple[float, float], body: Body) -> list:
+    """Cutting surfaces for the fin slab, swept along x (see the F3 layout).
+
+    Per fin sector (phi = -45..+45 deg about the fin root), in the fin's own
+    polar frame about its arc centre: the three fin arcs and the two arcs of a
+    wrap delta outside the faces; the tip-face plane, the wrap's corner lines
+    and its tip offset; the tip extension, straight up the root's radial line
+    to r = rZone; and the diagonals from the wrap's tip corners to
+    phi = -45/+45 deg on r = rZone. Plus the sector lines between fins and the
+    axial cuts where the fin walls start and end. Surfaces that would coincide
+    with fin walls are swept only over the x-ranges where the fin is absent.
+    """
+    occ = gmsh.model.occ
+    x0, x1 = slab
+    total, R, r_z = body.total, body.R, P["rZone"]
+    delta = P["finWrap"]
+    z0, z1, z2, z3 = spec.z
+    Ri, Re, Ro = spec.R_in, spec.R_edge, spec.R_out
+    tip, dA = spec.th_tip, delta / Re
+
+    def in_body(rho):
+        """A fin-frame angle on radius rho a little inside the body (r < R)."""
+        lo, hi = -math.pi / 2, tip
+        for _ in range(200):
+            m = 0.5 * (lo + hi)
+            if math.hypot(*spec.point(rho, m, 0.0)[1:]) < R:
+                lo = m
+            else:
+                hi = m
+        return lo - 0.05
+
+    def sweep(curve_pts, xa, xb, arc_centre=None):
+        """Surface swept along x from xa to xb by a line (2 points) or an arc."""
+        pts = [occ.addPoint(xa, y, z) for y, z in curve_pts]
+        if arc_centre:
+            c = occ.addPoint(xa, *arc_centre)
+            curve = occ.addCircleArc(pts[0], c, pts[1])
+            occ.remove([(0, c)])
+        else:
+            curve = occ.addLine(pts[0], pts[1])
+        return [dt for dt in occ.extrude([(1, curve)], xb - xa, 0, 0) if dt[0] == 2]
+
+    def yz(rho, a):
+        return spec.point(rho, a, 0.0)[1:]
+
+    centre = (spec.Yc, spec.Zc)
+    E = (r_z, 0.0)
+    Cm = (r_z * math.cos(math.pi / 4), -r_z * math.sin(math.pi / 4))
+    Cp = (r_z * math.cos(math.pi / 4), r_z * math.sin(math.pi / 4))
+    X = (r_z * math.cos(math.pi / 8), -r_z * math.sin(math.pi / 8))
+    phi_w = spec.wrap_root(delta, R)
+    W = (R * math.cos(phi_w), R * math.sin(phi_w))
+    Win = (W[0] - 0.1 * (Cp[0] - W[0]), W[1] - 0.1 * (Cp[1] - W[1]))     # a little inside the body
+    Pm, Pp, Q = yz(Ri - delta, tip + dA), yz(Ro + delta, tip + dA), yz(Re, tip + dA)
+    fin0 = []
+    for rho in (Ri - delta, Ro + delta):                                  # the wrap
+        fin0 += sweep([yz(rho, in_body(rho)), yz(rho, tip + dA)], x0, x1, centre)
+    for rho, ranges in ((Ri, ((x0, z1), (z2, x1))), (Ro, ((x0, z1), (z2, x1))),
+                        (Re, ((x0, z0), (z3, x1)))):                      # fin arcs off the walls
+        for xa, xb in ranges:
+            fin0 += sweep([yz(rho, in_body(rho)), yz(rho, tip)], xa, xb, centre)
+    fin0 += sweep([yz(Re, tip), Q], x0, x1, centre)                       # mid arc past the tip
+    for rho in (Ri, Ro):                                                  # tip-face plane ahead of the wall
+        quad = [(x0, *yz(rho, tip)), (x0, *yz(Re, tip)), (z0, *yz(Re, tip)), (z1, *yz(rho, tip))]
+        pts = [occ.addPoint(*q) for q in quad]
+        loop = occ.addCurveLoop([occ.addLine(pts[i], pts[(i + 1) % 4]) for i in range(4)])
+        fin0.append((2, occ.addPlaneSurface([loop])))
+    fin0 += sweep([yz(Ri, tip), Pm], x0, x1) + sweep([yz(Ro, tip), Pp], x0, x1)  # wrap corner lines
+    fin0 += sweep([Pm, Pp], x0, x1)                                       # wrap tip offset
+    # Outer lines from the cap top to r = rZone: Pm to -45 deg, the mid arc's
+    # end Q to -22.5 deg, Pp to 0 deg. (Pp to +45 deg would give the block
+    # above the cap's R_out half a 237-degree corner at Pp: the fin's bow
+    # tilts the tip towards -Z.) Between two fins, the line from the outer
+    # wrap's root on the body to +45 deg replaces a sector line.
+    fin0 += sweep([Q, X], x0, x1)                                         # tip extension
+    fin0 += sweep([Pm, Cm], x0, x1) + sweep([Pp, E], x0, x1)              # diagonals
+    fin0 += sweep([Win, Cp], x0, x1)                                      # between fins
+    # Leading-edge funnel (see the "Fin Tip Funnel" layout). The cap is not
+    # cut at z1, so the tip wall from the LE to z2 is one face. The split in
+    # front of it leaves the wall at the LE edge: ruled through the cap from
+    # the mid arc at z0 to the wrap corner line at z1, then bent by a second
+    # ruled surface so it reaches r = rZone on the x = z1 circle.
+    for rho, Pc, Cc in ((Ri, Pm, Cm), (Ro, Pp, E)):
+        fin0 += ruled(("arc", (z0, *yz(Re, tip)), (z0, *Q), (z0, *centre)),
+                      ("line", (z1, *yz(rho, tip)), (z1, *Pc)))
+        fin0 += ruled(("line", (z0, *Q), (z1, *Pc)), ("arc", (z1, *X), (z1, *Cc), (z1, 0.0, 0.0)))
+    tools = list(fin0)
+    for k in range(1, spec.N):
+        copy = occ.copy(fin0)
+        occ.rotate(copy, 0, 0, 0, 1, 0, 0, k * 2 * math.pi / spec.N)
+        tools += copy
+    # The z1 plane stops at the cap and the blocks above it, where the funnel
+    # takes over.
+    # Circle seams: on r = rZone at 0 deg (a block corner), on r = R at the
+    # outer wrap's root.
+    plane = annulus(z1, 0.0, r_z, 0.0)
+    out = 1.3
+    # Its corners on the fin side run on past the tip corners into the fin,
+    # so its edge across the tip lies inside the solid and does not imprint
+    # x = z1 on the tip wall.
+    def past(a, b):
+        return (b[0] + 0.25 * (b[0] - a[0]), b[1] + 0.25 * (b[1] - a[1]))
+
+    notch_yz = [past(Pm, yz(Ri, tip)), Pm, Cm, (out * Cm[0], out * Cm[1]), (out * X[0], out * X[1]),
+                (out * r_z, 0.0), E, Pp, past(Pp, yz(Ro, tip))]
+    notches = []
+    for k in range(spec.N):
+        c, sn = math.cos(k * 2 * math.pi / spec.N), math.sin(k * 2 * math.pi / spec.N)
+        pts = [occ.addPoint(z1, y * c - z * sn, y * sn + z * c) for y, z in notch_yz]
+        loop = occ.addCurveLoop([occ.addLine(pts[i], pts[(i + 1) % len(pts)]) for i in range(len(pts))])
+        notches.append((2, occ.addPlaneSurface([loop])))
+    plane = occ.cut([plane], notches)[0]
+    tools += plane + [annulus(z2, 0.0, r_z, 0.0), annulus(total, R, r_z, 0.0, phi_w)]
+    return tools
+
+
+def ruled(w0: tuple, w1: tuple) -> list:
+    """Ruled surface between two curves, each ("line", A, B) or ("arc", A, B,
+    centre) with 3-D points, ruled A0-A1 and B0-B1. OCC's ThruSections picks
+    the pairing itself and can return the crossed (twisted) surface; this
+    checks the side edges and rebuilds with the second curve reversed."""
+    occ = gmsh.model.occ
+
+    def curve(w, rev):
+        kind, a, b = w[0], w[1], w[2]
+        if rev:
+            a, b = b, a
+        pa, pb = occ.addPoint(*a), occ.addPoint(*b)
+        if kind == "line":
+            return occ.addLine(pa, pb)
+        c = occ.addPoint(*w[3])
+        t = occ.addCircleArc(pa, c, pb)
+        occ.remove([(0, c)])
+        return t
+
+    def near(p, q):
+        return math.dist(p, q) < 1e-6
+
+    for rev in (False, True):
+        faces = [dt for dt in occ.addThruSections([occ.addWire([curve(w0, False)]), occ.addWire([curve(w1, rev)])],
+                                                  makeSolid=False, makeRuled=True) if dt[0] == 2]
+        occ.synchronize()
+        ends = []
+        for _, c in gmsh.model.getBoundary(faces, oriented=False):
+            pts = [gmsh.model.getValue(0, p, []) for _, p in gmsh.model.getBoundary([(1, c)], oriented=False)]
+            if len(pts) == 2:
+                ends.append(pts)
+        crossed = any((near(p, w0[1]) and near(q, w1[2])) or (near(q, w0[1]) and near(p, w1[2]))
+                      for p, q in ends)
+        if not crossed:
+            return faces
+        occ.remove(faces, recursive=True)
+    raise RuntimeError(f"ruled surface between {w0} and {w1} stays twisted")
+
+
+def cap_boxes(spec: FinSpec, P: dict, x1: float) -> list:
+    """The tip caps behind z2 (one per fin): their own zone, so the prism
+    chain from the trailing-edge root triangle ends on a flat seam."""
+    occ = gmsh.model.occ
+    z2, c = spec.z[2], spec.cap(P["finWrap"])
+    pts = [occ.addPoint(z2, *c[k]) for k in ("bi", "bo", "Pp", "Pm")]
+    quad = occ.addPlaneSurface([occ.addCurveLoop([occ.addLine(pts[i], pts[(i + 1) % 4]) for i in range(4)])])
+    box = [dt for dt in occ.extrude([(2, quad)], x1 - z2, 0, 0) if dt[0] == 3]
+    out = list(box)
+    for k in range(1, spec.N):
+        copy = occ.copy(box)
+        occ.rotate(copy, 0, 0, 0, 1, 0, 0, k * 2 * math.pi / spec.N)
+        out += copy
+    return out
+
+
+def cap_volume(spec: FinSpec, P: dict, x1: float) -> float:
+    """Analytic volume of the N tip caps (straight-sided quadrilateral section)."""
+    q = [spec.cap(P["finWrap"])[k] for k in ("bi", "bo", "Pp", "Pm")]
+    area = 0.5 * abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(q, q[1:] + q[:1])))
+    return spec.N * area * (x1 - spec.z[2])
+
+
+def cap_tools(spec: FinSpec, P: dict, x1: float) -> list:
+    """Split each cap at the mid arc and along the trailing-edge wedge line:
+    per half, a prism over the wall triangle and a hexahedron behind it."""
+    occ = gmsh.model.occ
+    z2, z3, c = spec.z[2], spec.z[3], spec.cap(P["finWrap"])
+    centre = (spec.Yc, spec.Zc)
+
+    def arc(x, a, b):
+        cc = occ.addPoint(x, *centre)
+        t = occ.addCircleArc(occ.addPoint(x, *a), cc, occ.addPoint(x, *b))
+        occ.remove([(0, cc)])
+        return t
+
+    mid = arc(z2, c["e"], c["Q"])
+    fin0 = [dt for dt in occ.extrude([(1, mid)], x1 - z2, 0, 0) if dt[0] == 2]
+    for b, Pc in (("bi", "Pm"), ("bo", "Pp")):
+        fin0 += ruled(("line", (z2, *c[b]), (z2, *c[Pc])), ("arc", (z3, *c["e"]), (z3, *c["Q"]), (z3, *centre)))
+    tools = list(fin0)
+    for k in range(1, spec.N):
+        copy = occ.copy(fin0)
+        occ.rotate(copy, 0, 0, 0, 1, 0, 0, k * 2 * math.pi / spec.N)
+        tools += copy
+    return tools
+
+
+def cap_piece(s: int, spec: FinSpec, P: dict, x1: float):
+    """(fin, side) if face s lies on a tip cap's boundary behind z2, else None.
+    Sides: bottom (tip plane), top (wrap offset), ci/co (corner planes),
+    front (x = z2)."""
+    tol = 1e-3
+    bb = gmsh.model.getBoundingBox(2, s)
+    z2 = spec.z[2]
+    if bb[0] < z2 - tol or bb[3] > x1 + tol:
+        return None
+    x, y, z = gmsh.model.occ.getCenterOfMass(2, s)
+    k = round(math.atan2(z, y) / (2 * math.pi / spec.N)) % spec.N
+    a = -k * 2 * math.pi / spec.N
+    y, z = y * math.cos(a) - z * math.sin(a), y * math.sin(a) + z * math.cos(a)
+    c = spec.cap(P["finWrap"])
+
+    def on(p, q):
+        (px, py), (qx, qy) = p, q
+        L2 = (qx - px) ** 2 + (qy - py) ** 2
+        t = max(0.0, min(1.0, ((y - px) * (qx - px) + (z - py) * (qy - py)) / L2))
+        return math.hypot(y - px - t * (qx - px), z - py - t * (qy - py)) < tol
+
+    for side, (p, q) in (("bottom", ("bi", "bo")), ("top", ("Pm", "Pp")), ("ci", ("bi", "Pm")),
+                         ("co", ("bo", "Pp"))):
+        if bb[3] - bb[0] > tol and on(c[p], c[q]):
+            return k, side
+    if bb[3] - bb[0] < tol and abs(x - z2) < tol:
+        quad = [c[n] for n in ("bi", "bo", "Pp", "Pm")]
+        cross = [(q[0] - p[0]) * (z - p[1]) - (q[1] - p[1]) * (y - p[0])
+                 for p, q in zip(quad, quad[1:] + quad[:1])]
+        if all(v > 0 for v in cross) or all(v < 0 for v in cross):
+            return k, "front"
+    return None
+
+
 def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
     """Zones, split into hexahedral blocks, and the named faces.
 
@@ -225,32 +473,94 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
     p_rim = occ.addPoint(total, R, 0)
     p_base = occ.addPoint(total, 0, 0)
     p_c = occ.addPoint(body.xc, body.yc, 0)
-    loop = occ.addCurveLoop([occ.addCircleArc(p_apex, p_c, p_sh), occ.addLine(p_sh, p_rim),
-                             occ.addLine(p_rim, p_base), occ.addLine(p_base, p_apex)])
-    profile = occ.addPlaneSurface([loop])
-    solid = [(3, t) for d, t in occ.revolve([(2, profile)], 0, 0, 0, 1, 0, 0, 2 * math.pi) if d == 3]
+    p_sh0 = occ.addPoint(body.l_ogive, 0, 0)
+    cut = occ.addLine(p_sh, p_sh0)
+    nose = occ.addPlaneSurface([occ.addCurveLoop([occ.addCircleArc(p_apex, p_c, p_sh), cut,
+                                                  occ.addLine(p_sh0, p_apex)])])
+    # A revolution's parameter seam starts at phi = 0, where the nose and
+    # body blocks have an edge. In the fin slab phi = 0 is fin 0's root,
+    # where the seam would split the faces around the root, so the body
+    # behind the slab start is a separate revolution turned onto the outer
+    # wrap's root line (a block edge on r = R there). The bare body keeps one
+    # cylinder, turned onto 45 deg.
+    x_cut = slab[0] if slab else None
+    profiles = [nose]
+    if x_cut:
+        p_a, p_a0 = occ.addPoint(x_cut, R, 0), occ.addPoint(x_cut, 0, 0)
+        split = occ.addLine(p_a, p_a0)
+        profiles.append(occ.addPlaneSurface([occ.addCurveLoop([occ.addLine(p_sh, p_a), split,
+                                                               occ.addLine(p_a0, p_sh0), cut])]))
+        profiles.append(occ.addPlaneSurface([occ.addCurveLoop([occ.addLine(p_a, p_rim), occ.addLine(p_rim, p_base),
+                                                               occ.addLine(p_base, p_a0), split])]))
+        turns = [0.0, 0.0, spec.wrap_root(P["finWrap"], R)]
+    else:
+        profiles.append(occ.addPlaneSurface([occ.addCurveLoop([occ.addLine(p_sh, p_rim), occ.addLine(p_rim, p_base),
+                                                               occ.addLine(p_base, p_sh0), cut])]))
+        turns = [0.0, math.pi / 4]
+    parts = []
+    for f, turn in zip(profiles, turns):
+        vol = [(3, t) for d, t in occ.revolve([(2, f)], 0, 0, 0, 1, 0, 0, 2 * math.pi) if d == 3]
+        if turn:
+            occ.rotate(vol, 0, 0, 0, 1, 0, 0, turn)
+        parts += vol
     occ.remove([(0, p_c)])
-    v_body = occ.getMass(*solid[0])
+    v_body = sum(occ.getMass(*v) for v in parts)
     fin_info = {}
     if spec:
-        solid, _ = occ.fuse(solid, build_fins(spec))
+        # The pieces stay separate solids (a fuse merges the two cylinders'
+        # faces and with them the seams); the cuts below only use them as
+        # tools. The fused copy is just for the wall checks.
+        fins = build_fins(spec)
+        whole, _ = occ.fuse(occ.copy(parts), occ.copy(fins))
         occ.synchronize()
-        fin_info = {"exposed_volume": occ.getMass(*solid[0]) - v_body,
-                    "wall_area": sum(occ.getMass(*f) for f in gmsh.model.getBoundary(solid, oriented=False))}
+        fin_info = {"exposed_volume": occ.getMass(*whole[0]) - v_body,
+                    "wall_area": sum(occ.getMass(*f) for f in gmsh.model.getBoundary(whole, oriented=False))}
+        occ.remove(whole, recursive=True)
+        solid = parts + fins
+    else:
+        solid, _ = occ.fuse(parts[:1], parts[1:])
 
     # Zone layout: (name, x0, x1, inner?, group).
     if slab:
         layout = [("nose", xs[0], xs[1], True, 0), ("body", xs[1], slab[0], True, 0),
-                  ("slab", slab[0], slab[1], True, 1), ("wake", slab[1], xs[3], True, 2),
+                  ("slab", slab[0], slab[1], True, 1), ("slab_core", total, slab[1], True, 6),
+                  ("cap", spec.z[2], slab[1], True, 7),
+                  ("wake", slab[1], xs[3], True, 2),
                   ("far", x_in, slab[0], False, 3), ("far_slab", slab[0], slab[1], False, 4),
                   ("far_aft", slab[1], x_out, False, 5)]
     else:
         layout = [("nose", xs[0], xs[1], True, 0), ("body", xs[1], xs[2], True, 0),
                   ("aft", xs[2], xs[3], True, 0), ("far", x_in, x_out, False, 1)]
+    def overlapping(x0, x1):
+        """The body and fin solids reaching into x0..x1 (a solid that only
+        touches the range would imprint its seam vertices on the zone)."""
+        out = []
+        for v in solid:
+            bb = occ.getBoundingBox(*v)
+            if bb[0] < x1 - PAD and bb[3] > x0 + PAD:
+                out.append(v)
+        return out
+
     zones = {}
     for name, x0, x1, inner, _ in layout:
-        if inner:
-            pieces, _ = occ.cut([x_cylinder(x0, x1 - x0, r_z)], solid, removeTool=False)
+        if name == "slab_core":
+            # Behind the base, r < R: its own zone, so the fin sectors' many
+            # block corners on r = R stay out of the core (joined with
+            # matching nodes on r = R).
+            pieces = [x_cylinder(x0, x1 - x0, R)]
+        elif name == "slab":
+            phi_w = spec.wrap_root(P["finWrap"], R)
+            core = x_cylinder(total, x1 - total, R,
+                              [phi_w + k * 2 * math.pi / spec.N for k in range(spec.N)])
+            caps = cap_boxes(spec, P, x1)
+            pieces, _ = occ.cut([x_cylinder(x0, x1 - x0, r_z)], overlapping(x0, x1) + [core] + caps,
+                                removeTool=False)
+            occ.remove([core], recursive=True)
+        elif name == "cap":
+            pieces = caps
+        elif inner:
+            cyl, tools = x_cylinder(x0, x1 - x0, r_z), overlapping(x0, x1)
+            pieces = occ.cut([cyl], tools, removeTool=False)[0] if tools else [cyl]
         else:
             hole = max(x0, xs[0]), min(x1, xs[3])
             tools = [x_cylinder(hole[0], hole[1] - hole[0], r_z)] if hole[1] > hole[0] else []
@@ -339,6 +649,12 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
         return t_
 
     if slab:
+        zones = others(1) | fragment(of_group(1), slab_tools(spec, P, slab, body))
+        core = ([half_plane(t, total, slab[1], 0.0, R) for t in thetas[0::2]]
+                + [half_plane(t, total, slab[1], SQ2 * s_w, R) for t in thetas[1::2]]
+                + [square_prism(total, s_w, slab[1], s_w)])
+        zones = others(6) | fragment(of_group(6), core)
+        zones = others(7) | fragment(of_group(7), cap_tools(spec, P, slab[1]))
         zones = others(2) | fragment(of_group(2), wake_tools(slab[1], xs[3]))
         for g, (x0, x1) in ((3, (x_in, slab[0])), (4, slab), (5, (slab[1], x_out))):
             zones = others(g) | fragment(of_group(g), far_tools(x0, x1))
@@ -357,7 +673,7 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
     planes = {xs[0]: "up", xs[3]: "down"}
     if slab:
         planes |= {slab[0]: "slab_in", slab[1]: "slab_out"}
-    fine = {"slab", "far_slab"}
+    fine = {"slab", "far_slab", "slab_core", "cap"}
     groups: dict[str, list[int]] = {}
     shared = set()
     for s, own in owners.items():
@@ -373,6 +689,23 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
         bb = gmsh.model.getBoundingBox(2, s)
         rmax = max(abs(v) for v in bb[1:3] + bb[4:6])
         flat_x = abs(bb[0] - bb[3]) < PAD
+        cp = cap_piece(s, spec, P, slab[1]) if slab else None
+        if cp:
+            # Tip cap behind z2: flat seams to the slab, apart from the
+            # trailing-edge wall triangles on its bottom.
+            k, side = cp
+            x, y, z = gmsh.model.occ.getCenterOfMass(2, s)
+            a = -k * 2 * math.pi / spec.N
+            yr, zr = y * math.cos(a) - z * math.sin(a), y * math.sin(a) + z * math.cos(a)
+            rho = math.hypot(yr - spec.Yc, zr - spec.Zc)
+            z2, z3 = spec.z[2], spec.z[3]
+            if side == "bottom" and x < z3 and abs(rho - spec.R_edge) < (
+                    (spec.R_edge - spec.R_in) * (z3 - x) / (z3 - z2)):
+                key = "stabilizers"
+            else:
+                key = f"seam_cap{k}_{side}_{'slave' if zone == 'cap' else 'master'}"
+            groups.setdefault(key, []).append(s)
+            continue
         plane = next((n for xp, n in planes.items() if flat_x and abs(bb[0] - xp) < PAD), None)
         far_side = zone.startswith("far")
         if plane and (rmax < r_z + PAD or plane.startswith("slab")):
@@ -383,6 +716,8 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
             else:
                 role = "slave" if zone in fine else "master"
             key = f"seam_{plane}_{role}"
+        elif slab and bb[0] > total - PAD and bb[3] < slab[1] + PAD and _on_cylinder(s, R):
+            key = f"seam_core_side_{'master' if zone == 'slab_core' else 'slave'}"
         elif rmax < r_z + PAD and bb[0] > xs[0] - PAD and bb[3] < xs[3] + PAD and _on_cylinder(s, r_z):
             part = "side"
             if slab:
@@ -406,7 +741,8 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
     for key, surfs in groups.items():
         gmsh.model.addPhysicalGroup(2, surfs, name=key)
     return {"zones": zones, "groups": groups, "xs": xs, "layout": layout, "shared": shared,
-            "slab": slab, "fins": fin_info, "body_volume": v_body,
+            "slab": slab, "fins": fin_info, "body_volume": v_body, "fins_n": spec.N if spec else 0,
+            "cap_volume": cap_volume(spec, P, slab[1]) if slab else 0.0,
             "tip": {"beta": math.degrees(beta), "x_a": x_a, "x_45": x_45, "x_end": x_end,
                     "h_in": h(xs[0])}}
 
@@ -497,12 +833,17 @@ def _on_body(s: int, body: Body) -> bool:
     uv = [c for f in (0.21, 0.5, 0.79) for g in (0.23, 0.5, 0.77)
           for c in (u0 + (u1 - u0) * f, v0 + (v1 - v0) * g)]
     pts = gmsh.model.getValue(2, s, uv)
+    seen = 0
     for i in range(0, len(pts), 3):
-        x, r = pts[i], math.hypot(pts[i + 1], pts[i + 2])
+        p = pts[i:i + 3]
+        if not gmsh.model.isInside(2, s, p, parametric=False):
+            continue                    # a trimmed face's parameter box reaches past the face
+        seen += 1
+        x, r = p[0], math.hypot(p[1], p[2])
         on_base = abs(x - body.total) < 1e-6 and r < body.R + 1e-6
         if not on_base and abs(r - body.r(x)) > 1e-4:
             return False
-    return True
+    return seen > 0
 
 
 def _on_cylinder(s: int, r: float) -> bool:
@@ -936,6 +1277,30 @@ class FinSpec:
     def point(self, r: float, a: float, x: float) -> tuple[float, float, float]:
         return (x, self.Yc + r * math.sin(a), self.Zc + r * math.cos(a))
 
+    def cap(self, delta: float) -> dict[str, tuple[float, float]]:
+        """Fin 0's tip cap in (Y, Z): the tip-face corners bi/bo, the wrap
+        corners Pm/Pp a wrap `delta` outside the faces and past the tip, and
+        Q on the mid arc between them. All four sides are straight: the tip
+        face and the wrap offset lie on radial lines of the arc centre."""
+        yz = lambda r, a: self.point(r, a, 0.0)[1:]
+        t, dA = self.th_tip, delta / self.R_edge
+        return {"bi": yz(self.R_in, t), "bo": yz(self.R_out, t), "e": yz(self.R_edge, t),
+                "Pm": yz(self.R_in - delta, t + dA), "Pp": yz(self.R_out + delta, t + dA),
+                "Q": yz(self.R_edge, t + dA)}
+
+    def wrap_root(self, delta: float, R: float) -> float:
+        """phi (rad) where fin 0's outer wrap arc (R_out + delta) meets r = R."""
+        rho = self.R_out + delta
+        lo, hi = -math.pi / 2, self.th_tip
+        for _ in range(200):
+            m = 0.5 * (lo + hi)
+            if math.hypot(*self.point(rho, m, 0.0)[1:]) < R:
+                lo = m
+            else:
+                hi = m
+        y, z = self.point(rho, lo, 0.0)[1:]
+        return math.atan2(z, y)
+
     def tip_radius(self) -> float:
         return math.hypot(*self.point(self.R_edge, self.th_tip, 0.0)[1:])
 
@@ -1073,7 +1438,13 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
         if inner:
             lo, hi = max(0.0, x0), min(total, x1)
             vb = body.integrate(lo, hi)[0] if hi > lo else 0.0
-            want = math.pi * r_z**2 * (x1 - x0) - vb - (v_fins if name == "slab" else 0.0)
+            want = math.pi * r_z**2 * (x1 - x0) - vb
+            if name == "slab":
+                want -= v_fins + math.pi * R**2 * (x1 - total) + info["cap_volume"]
+            elif name == "cap":
+                want = info["cap_volume"]
+            elif name == "slab_core":
+                want = math.pi * R**2 * (x1 - x0)
         else:
             overlap = max(0.0, min(x1, xs[3]) - max(x0, xs[0]))
             want = math.pi * (P["rFar"] ** 2 * (x1 - x0) - r_z**2 * overlap)
@@ -1083,7 +1454,9 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
     # 12 edges, 8 corners) so it can carry a structured mesh. The fin slab
     # is not split into blocks yet.
     if info["slab"]:
-        expected = {"nose": 20, "body": 16, "slab": None, "wake": 20, "far": 28, "far_slab": 8, "far_aft": 28}
+        n = info["fins_n"]
+        expected = {"nose": 20, "body": 16, "slab": 34 * n, "slab_core": 12, "cap": 4 * n, "wake": 20,
+                    "far": 28, "far_slab": 8, "far_aft": 28}
     else:
         expected = {"nose": 20, "body": 16, "aft": 48, "far": 48}
     for name, want in expected.items():
@@ -1091,20 +1464,42 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
         if want is None:
             lines.append(f"  zone {name:8s}: {len(blocks):3d} volume(s), block split pending")
             continue
-        bad = []
+        bad, prisms = [], 0
         for v in blocks:
             faces = gmsh.model.getBoundary([(3, v)], oriented=False)
             edges = {c for f in faces for _, c in real_edges(f)}
             corners = {p for c in edges for _, p in gmsh.model.getBoundary([(1, c)], oriented=False)}
             per_face = [len(real_edges(f)) for f in faces]
-            if len(faces) != 6 or len(edges) != 12 or len(corners) != 8 or set(per_face) != {4}:
+            hexa = len(faces) == 6 and len(edges) == 12 and len(corners) == 8 and set(per_face) == {4}
+            prism = (len(faces) == 5 and len(edges) == 9 and len(corners) == 6
+                     and sorted(per_face) == [3, 3, 4, 4, 4])
+            if prism:
+                prisms += 1
+            if not (hexa or prism):
                 bad.append(f"{v}: {len(faces)}f/{len(edges)}e/{len(corners)}c {per_face}")
         good = len(blocks) == want and not bad
         ok &= good
-        lines.append(f"  zone {name:8s}: {len(blocks):3d} blocks (expected {want}), "
-                     f"{len(blocks) - len(bad)} hexahedral  {'ok' if good else 'FAIL'}")
+        lines.append(f"  zone {name:9s}: {len(blocks):3d} blocks (expected {want}), "
+                     f"{len(blocks) - len(bad) - prisms} hexahedral, {prisms} prisms  {'ok' if good else 'FAIL'}")
         for b in bad[:6]:
             lines.append(f"      not hex: block {b}")
+
+    # Block shapes: the corner angles of every planar block face, measured
+    # inside the face. Topology alone passes a block with a reflex corner,
+    # whose cells fold.
+    worst_corner = {}
+    for v, name in info["zones"].items():
+        for f in gmsh.model.getBoundary([(3, v)], oriented=False):
+            if gmsh.model.getType(*f) != "Plane":
+                continue
+            for ang, where in face_corner_angles(f[1]):
+                if ang > worst_corner.get(name, (0.0, None))[0]:
+                    worst_corner[name] = (ang, where)
+    for name, (ang, where) in sorted(worst_corner.items(), key=lambda kv: -kv[1][0]):
+        good = ang < 178.0
+        ok &= good
+        lines.append(f"  zone {name:9s}: largest block-face corner {ang:6.1f} deg at "
+                     f"({where[0]:.1f}, {where[1]:.1f}, {where[2]:.1f})  {'ok' if good else 'FAIL'}")
 
     # Wall radius against the analytic profile, sampled on each lateral wall
     # face over its own parameter range (the base disk is checked by area).
@@ -1128,6 +1523,39 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
                  f"({body.xc:.4f}, {body.yc:.4f}) mm")
     lines.append("  " + ("ALL CHECKS PASSED" if ok else "SOME CHECKS FAILED"))
     return lines
+
+
+def face_corner_angles(f: int) -> list[tuple[float, tuple]]:
+    """(angle in degrees, corner point) at each corner of planar face f,
+    measured inside the face from the edge tangents (over 180 = reflex)."""
+    edges = [c for _, c in real_edges((2, f))]
+    ends = {c: [p for _, p in gmsh.model.getBoundary([(1, c)], oriented=False)] for c in edges}
+    out = []
+    for p in {p for c in edges for p in ends[c]}:
+        cs = [c for c in edges if p in ends[c]]
+        if len(cs) != 2:
+            continue
+        P0 = gmsh.model.getValue(0, p, [])
+        dirs = []
+        for c in cs:
+            (t0,), (t1,) = gmsh.model.getParametrizationBounds(1, c)
+            a, b = gmsh.model.getValue(1, c, [t0]), gmsh.model.getValue(1, c, [t1])
+            start = math.dist(a, P0) < math.dist(b, P0)
+            t = t0 + (t1 - t0) * (1e-4 if start else 1 - 1e-4)
+            q = gmsh.model.getValue(1, c, [t])
+            d = [q[i] - P0[i] for i in range(3)]
+            n = math.sqrt(sum(x * x for x in d))
+            dirs.append([x / n for x in d])
+        cosang = max(-1.0, min(1.0, sum(dirs[0][i] * dirs[1][i] for i in range(3))))
+        ang = math.degrees(math.acos(cosang))
+        bis = [dirs[0][i] + dirs[1][i] for i in range(3)]
+        nb = math.sqrt(sum(x * x for x in bis))
+        if nb > 1e-9:
+            probe = [P0[i] + 0.02 * bis[i] / nb for i in range(3)]
+            if not gmsh.model.isInside(2, f, probe):
+                ang = 360.0 - ang
+        out.append((ang, tuple(P0)))
+    return out
 
 
 def hex_corners(v: int) -> list[int]:
@@ -1193,6 +1621,117 @@ def volume_mesh(info: dict, out: Path) -> dict:
     return {"counts": counts, "worst": worst, "low": low}
 
 
+PREVIEW_CONTROLDICT = """FoamFile { version 2.0; format ascii; class dictionary; object controlDict; }
+application none; startFrom startTime; startTime 0; stopAt endTime; endTime 0; deltaT 1;
+writeControl timeStep; writeInterval 1; writeFormat ascii; writePrecision 8; timeFormat general;
+"""
+
+
+def prism_corners(v: int) -> list[int]:
+    """For a prism block: its 6 corners (one triangle, then the other, each
+    corner above its partner), with both triangles' transfinite corners set
+    to match, so their collapsed corners lie on the same lateral edge. [] for
+    any other block."""
+    faces = gmsh.model.getBoundary([(3, v)], oriented=False)
+    tris = [f for f in faces if len(real_edges(f)) == 3]
+    if len(faces) != 5 or len(tris) != 2:
+        return []
+    pts = [[abs(p) for _, p in gmsh.model.getBoundary([f], combined=True, oriented=False, recursive=True)]
+           for f in tris]
+    # Gmsh collapses a transfinite triangle at its first corner, fanning one
+    # row of prisms around it: use the widest corner. A fan at the sharp
+    # (22.5-degree) trailing-edge corner gives sliver prisms whose centres
+    # fall outside their faces.
+    xyz = {p: gmsh.model.getValue(0, p, []) for p in pts[0]}
+
+    def angle(p):
+        a, b = [q for q in pts[0] if q != p]
+        u = [xyz[a][i] - xyz[p][i] for i in range(3)]
+        w = [xyz[b][i] - xyz[p][i] for i in range(3)]
+        return math.acos(sum(u[i] * w[i] for i in range(3)) / math.dist(xyz[a], xyz[p]) / math.dist(xyz[b], xyz[p]))
+
+    first = max(pts[0], key=angle)
+    i = pts[0].index(first)
+    bottom, top_set = pts[0][i:] + pts[0][:i], set(pts[1])
+    # right-handed: the bottom triangle's normal points to the top one
+    top_c = [sum(gmsh.model.getValue(0, p, [])[k] for p in pts[1]) / 3 for k in range(3)]
+    a, b, c = (xyz[p] for p in bottom)
+    u, w = [b[k] - a[k] for k in range(3)], [c[k] - a[k] for k in range(3)]
+    nrm = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
+    if sum(nrm[k] * (top_c[k] - a[k]) for k in range(3)) < 0:
+        bottom = [bottom[0], bottom[2], bottom[1]]
+    ends = []
+    for f in faces:
+        for _, c in real_edges(f):
+            ends.append([abs(p) for _, p in gmsh.model.getBoundary([(1, c)], oriented=False)])
+    top = [next(b if a == p else a for a, b in ends if p in (a, b) and ({a, b} - {p}) <= top_set) for p in bottom]
+    gmsh.model.mesh.setTransfiniteSurface(tris[0][1], cornerTags=bottom)
+    gmsh.model.mesh.setTransfiniteSurface(tris[1][1], cornerTags=top)
+    return bottom + top
+
+
+def preview_mesh(info: dict, out: Path, n: int) -> str:
+    """The block layout as a coarse mesh: n cells along every block edge, so
+    each block shows as an n x n x n lattice (prisms where a block is one).
+    Equal counts satisfy every transfinite constraint, so no spacing is
+    needed. Writes out/mesh.msh and, when gmshToFoam is on PATH, converts it
+    into the OpenFOAM case out/ (case.foam for ParaView: one cell zone per
+    mesh zone, every seam left as its own unstitched patch) and runs
+    checkMesh there."""
+    for _, c in gmsh.model.getEntities(1):
+        if Curve(c).length > 1e-9:                     # not OCC's pole edge at the apex
+            gmsh.model.mesh.setTransfiniteCurve(c, n + 1)
+    for _, f in gmsh.model.getEntities(2):
+        loop = [c for _, c in real_edges((2, f))]
+        corners = []
+        if len(loop) != len(gmsh.model.getBoundary([(2, f)], oriented=False)):
+            # a face at the apex: its zero-length pole edge hides a corner
+            ends = {c: [abs(p) for _, p in gmsh.model.getBoundary([(1, c)], oriented=False)] for c in loop}
+            here, todo = ends[loop[0]][0], list(loop)
+            while todo:
+                c = next(c for c in todo if here in ends[c])
+                todo.remove(c)
+                corners.append(here)
+                here = ends[c][1] if ends[c][0] == here else ends[c][0]
+        gmsh.model.mesh.setTransfiniteSurface(f, cornerTags=corners)
+        gmsh.model.mesh.setRecombine(2, f)
+    for v in info["zones"]:
+        corners = prism_corners(v) or hex_corners(v)
+        gmsh.model.mesh.setTransfiniteVolume(v, cornerTags=corners)
+        gmsh.model.mesh.setRecombine(3, v)
+    gmsh.model.mesh.generate(3)
+    counts = {}
+    for v in info["zones"]:
+        for et, tags, _ in zip(*gmsh.model.mesh.getElements(3, v)):
+            name = gmsh.model.mesh.getElementProperties(et)[0]
+            counts[name] = counts.get(name, 0) + len(tags)
+    for dim, tag in gmsh.model.getPhysicalGroups(2):
+        if gmsh.model.getPhysicalName(dim, tag) in info["shared"]:
+            gmsh.model.removePhysicalGroups([(dim, tag)])
+    out.mkdir(parents=True, exist_ok=True)
+    gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
+    gmsh.option.setNumber("Mesh.Binary", 0)
+    gmsh.option.setNumber("Mesh.SaveAll", 0)
+    gmsh.write(str(out / "mesh.msh"))
+    summary = f"{sum(counts.values())} cells {counts}, wrote {out / 'mesh.msh'}"
+    if not shutil.which("gmshToFoam"):
+        return summary + "; gmshToFoam not on PATH, so no OpenFOAM case"
+    (out / "system").mkdir(exist_ok=True)
+    (out / "system" / "controlDict").write_text(PREVIEW_CONTROLDICT)
+    for name in ("fvSchemes", "fvSolution"):                   # checkMesh reads them
+        shutil.copy(out.parent / "system" / name, out / "system" / name)
+    (out / "case.foam").touch()
+    shutil.rmtree(out / "constant" / "polyMesh", ignore_errors=True)
+    for cmd in (["gmshToFoam", "mesh.msh"], ["checkMesh", "-constant", "-noZero"]):
+        log = out / f"log.{cmd[0]}"
+        with log.open("w") as fh:
+            subprocess.run(cmd, cwd=out, stdout=fh, stderr=subprocess.STDOUT, check=False)
+    text = (out / "log.checkMesh").read_text()
+    flags = [ln.strip() for ln in text.splitlines() if ln.strip().startswith("***")]
+    verdict = "Mesh OK" if "Mesh OK" in text else "; ".join(flags) or "checkMesh failed, see log.checkMesh"
+    return summary + f"; OpenFOAM case {out / 'case.foam'}; checkMesh: {verdict}"
+
+
 def write_vtk(path: Path, info: dict) -> tuple[dict[str, int], dict[str, int]]:
     """Write every meshed face as a binary legacy VTK file for ParaView.
 
@@ -1248,7 +1787,10 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("case", type=Path)
     ap.add_argument("--gui", action="store_true", help="open the result in the Gmsh GUI")
-    ap.add_argument("--geometry-only", action="store_true", help="stop after the block layout (step 1)")
+    ap.add_argument("--geometry-only", action="store_true",
+                    help="stop after the block layout and write a coarse preview mesh to <case>/preview")
+    ap.add_argument("--preview-cells", type=int, default=4, metavar="N",
+                    help="cells along every block edge in the preview mesh (default 4)")
     ap.add_argument("--volume", action="store_true", help="also mesh the volume and write mesh.msh (step 3)")
     ap.add_argument("--fins", action="store_true",
                     help="build only the fins, check them against the scad, write fins.stl (fin step F1)")
@@ -1298,29 +1840,8 @@ def main(argv: list[str]) -> int:
         print("checks:")
         print("\n".join(check(body, params, info)))
         if args.geometry_only:
-            # coarse unstructured preview of every face, for ParaView
-            gmsh.option.setNumber("Mesh.MeshSizeMax", 8.0)
-            gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 12)
-            # Faces touching the apex carry OCC's zero-length pole edge, which
-            # the unstructured mesher rejects; mesh those few structured.
-            for _, f in gmsh.model.getEntities(2):
-                loop = [c for _, c in real_edges((2, f))]
-                if len(loop) == len(gmsh.model.getBoundary([(2, f)], oriented=False)):
-                    continue
-                for c in loop:
-                    gmsh.model.mesh.setTransfiniteCurve(c, 5)
-                ends = {c: [abs(p) for _, p in gmsh.model.getBoundary([(1, c)], oriented=False)] for c in loop}
-                here, corners, todo = ends[loop[0]][0], [], list(loop)
-                while todo:
-                    c = next(c for c in todo if here in ends[c])
-                    todo.remove(c)
-                    corners.append(here)
-                    here = ends[c][1] if ends[c][0] == here else ends[c][0]
-                gmsh.model.mesh.setTransfiniteSurface(f, cornerTags=corners)
-            gmsh.model.mesh.generate(2)
-            legend, zone_ids = write_vtk(case / "geometry.vtk", info)
-            print(f"wrote {case / 'geometry.vtk'}; group: " + ", ".join(f"{i} {k}" for k, i in legend.items())
-                  + "; zone: " + ", ".join(f"{i} {k}" for k, i in zone_ids.items()))
+            out = preview_mesh(info, case / "preview", args.preview_cells)
+            print(f"preview mesh: {out}")
         else:
             sm = surface_mesh(body, params, info)
             print("surface mesh:")

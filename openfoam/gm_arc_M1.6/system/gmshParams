@@ -39,6 +39,7 @@ coreWake      20;      // wake core half-width behind the base
 coreFar       60;      // far-zone core half-width upstream and downstream
 xWakeSplit    820;     // wake blocks split: near part | radially relaxing part (bare body)
 xSlabEnd      900;     // with fins: the fin slab runs xAftStart..xSlabEnd
+finWrap         6;
 
 // Spacing (mm). Cell counts per edge family follow from these.
 nTheta        16;      // cells per 45-degree sector, every zone (seam rule)
