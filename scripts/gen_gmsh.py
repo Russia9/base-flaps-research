@@ -50,7 +50,7 @@ PARAMS = {
     "xWakeSplit": 820.0, "hRelax": 2.0, "hWakeRadial": 1.0, "firstLayerTip": 0.02,
     "xSlabEnd": 900.0, "finWrap": 6.0,
     # fin slab spacing (mm)
-    "hFinChord": 0.5, "hFinSpan": 0.5, "hSlabOuter": 2.0,
+    "hFinChord": 0.5, "hFinSpan": 0.5, "hSlabOuter": 2.0, "finSpanCut": -8.0,
 }
 INTEGER = ("nTheta", "nLayers")
 
@@ -259,9 +259,16 @@ def slab_tools(spec: FinSpec, P: dict, slab: tuple[float, float], body: Body) ->
     Cm = (r_z * math.cos(math.pi / 4), -r_z * math.sin(math.pi / 4))
     Cp = (r_z * math.cos(math.pi / 4), r_z * math.sin(math.pi / 4))
     X = (r_z * math.cos(math.pi / 8), -r_z * math.sin(math.pi / 8))
-    phi_w = spec.wrap_root(delta, R)
-    W = (R * math.cos(phi_w), R * math.sin(phi_w))
-    Win = (W[0] - 0.1 * (Cp[0] - W[0]), W[1] - 0.1 * (Cp[1] - W[1]))     # a little inside the body
+    # Span station: every wrap is split at the same arc angle, and across the
+    # gap fin 0's outer-wrap point Ws joins the next fin's inner-wrap point Vs.
+    # Without the cut, the blocks between fins would carry the full span
+    # count (wall stacks at the body and the tip) in both directions.
+    phi_w = spec.wrap_root(delta, R)                                      # seams on r = R sit on this line
+    a_s = math.radians(P["finSpanCut"])
+    turn = 2 * math.pi / spec.N
+    Ws = yz(Ro + delta, a_s)
+    v = yz(Ri - delta, a_s)
+    Vs = (v[0] * math.cos(turn) - v[1] * math.sin(turn), v[0] * math.sin(turn) + v[1] * math.cos(turn))
     Pm, Pp, Q = yz(Ri - delta, tip + dA), yz(Ro + delta, tip + dA), yz(Re, tip + dA)
     fin0 = []
     for rho in (Ri - delta, Ro + delta):                                  # the wrap
@@ -281,11 +288,11 @@ def slab_tools(spec: FinSpec, P: dict, slab: tuple[float, float], body: Body) ->
     # Outer lines from the cap top to r = rZone: Pm to -45 deg, the mid arc's
     # end Q to -22.5 deg, Pp to 0 deg. (Pp to +45 deg would give the block
     # above the cap's R_out half a 237-degree corner at Pp: the fin's bow
-    # tilts the tip towards -Z.) Between two fins, the line from the outer
-    # wrap's root on the body to +45 deg replaces a sector line.
+    # tilts the tip towards -Z.)
     fin0 += sweep([Q, X], x0, x1)                                         # tip extension
     fin0 += sweep([Pm, Cm], x0, x1) + sweep([Pp, E], x0, x1)              # diagonals
-    fin0 += sweep([Win, Cp], x0, x1)                                      # between fins
+    fin0 += sweep([yz(Ri - delta, a_s), Ws], x0, x1)                      # span station through the wrap
+    fin0 += sweep([Ws, Vs], x0, x1) + sweep([Ws, Cp], x0, x1)             # across the gap, and up to +45 deg
     # Leading-edge funnel (see the "Fin Tip Funnel" layout). The cap is not
     # cut at z1, so the tip wall from the LE to z2 is one face. The split in
     # front of it leaves the wall at the LE edge: ruled through the cap from
@@ -1448,8 +1455,23 @@ def edge_needs(topo: Topo, body: Body, P: dict, spec) -> dict[int, tuple]:
     tip = End(P["firstLayerTip"], q)
     x45 = topo.info["tip"]["x_45"]
     r_z, R, total = P["rZone"], body.R, body.total
-    r_tip = spec.tip_radius() + 2 * P["finWrap"] if spec else 0.0
+    r_tip = spec.tip_radius() + 2 * P["finWrap"] if spec else 0.0         # axial fin sizes inside this
     fin_x = (spec.z[0] - P["finWrap"], total) if spec else None
+    def in_wrap(pt):
+        """Inside a fin's wrap (fin frame: between the wrap arcs, up to the
+        wrap's tip offset), where the fin sizes apply."""
+        if not spec:
+            return False
+        _, y, z = pt
+        k = round(math.atan2(z, y) / (2 * math.pi / spec.N))
+        a = -k * 2 * math.pi / spec.N
+        y, z = y * math.cos(a) - z * math.sin(a), y * math.sin(a) + z * math.cos(a)
+        rho = math.hypot(y - spec.Yc, z - spec.Zc)
+        ang = math.atan2(y - spec.Yc, z - spec.Zc)               # spec.point's angle convention
+        d, tol = P["finWrap"], 1e-3
+        return (spec.R_in - d - tol <= rho <= spec.R_out + d + tol
+                and ang <= spec.th_tip + d / spec.R_edge + tol)
+
     needs = {}
     for c, cv in topo.curves.items():
         zones = topo.edge_zones[c]
@@ -1475,7 +1497,7 @@ def edge_needs(topo: Topo, body: Body, P: dict, spec) -> dict[int, tuple]:
             else:
                 h_ax = P["hRelax"] if xm < P["xWakeSplit"] or slabby else P["hWake"]
             if slabby:
-                h_cr = P["hFinSpan"] if max(cv.rp, cv.rq) <= r_tip else P["hSlabOuter"]
+                h_cr = P["hFinSpan"] if all(in_wrap(pt) for pt in (cv.p, cv.pts[200], cv.q)) else P["hSlabOuter"]
             else:
                 h_cr = P["hRingOut"]
         if kind == "axial":
@@ -1779,7 +1801,7 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
     # is not split into blocks yet.
     if info["slab"]:
         n = info["fins_n"]
-        expected = {"nose": 20, "body": 16, "slab": 34 * n, "slab_core": 12, "cap": 4 * n, "wake": 20,
+        expected = {"nose": 20, "body": 16, "slab": 52 * n, "slab_core": 12, "cap": 4 * n, "wake": 20,
                     "far": 28, "far_slab": 8, "far_aft": 28}
     else:
         expected = {"nose": 20, "body": 16, "aft": 48, "far": 48}
