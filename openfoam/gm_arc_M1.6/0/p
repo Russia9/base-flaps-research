@@ -29,7 +29,7 @@ boundaryField
         T               $TInf;
         value           $internalField;
     }
-    fuselage
+    "(fuselage|stabilizers)"
     {
         type            characteristicWallPressure;
         value           $internalField;

@@ -27,7 +27,7 @@ rFar          600;
 // and the inner cylinder's boundary (side and both end disks).
 xZoneStart    -40;     // upstream end of the nose zone (tip at x = 0)
 xNoseEnd      40;      // nose | body seam
-xAftStart     620;     // body | aft seam (fins start at x = 660)
+xAftStart     640;     // body | slab seam (fins start at x = 660)
 xZoneEnd      1200;    // downstream end of the aft zone (base at x = 800)
 rZone         120;     // inner-zone radius (fin tips reach r = 86.7)
 
@@ -38,10 +38,10 @@ xTipInterface -30;     // where the tip-patch interface reaches r = rZone
 coreWake      20;      // wake core half-width behind the base
 coreFar       60;      // far-zone core half-width upstream and downstream
 xWakeSplit    820;     // wake blocks split: near part | radially relaxing part (bare body)
-xSlabEnd      900;     // with fins: the fin slab runs xAftStart..xSlabEnd
+xSlabEnd      840;     // with fins: the fin slab runs xAftStart..xSlabEnd
 finWrap       6;       // wrap layer around each fin (mm)
 hFinChord     2.5;     // max axial cell along the fins
-hFinSpan      1.5;     // max cell along the span, the thickness and the cap (inside the wrap)
+hFinSpan      2.0;     // max cell along the span, the thickness and the cap (inside the wrap)
 hSlabOuter    3.0;     // max cell in the slab outside the wraps
 finSpanCut    -8;      // span station (deg, arc angle about the fin's centre) where the gaps between fins are cut
 hLE           0.2;     // chordwise cell at the fin LE/TE wedges
@@ -63,7 +63,7 @@ hWake         4.0;     // max axial cell at the end of the wake
 hWakeRadial   1.0;     // radial cell at r = R at the end of the wake
 hSeam         4.0;     // far-zone cell at its seams with the inner zones
 hFarMid       8.0;     // far-zone axial cell around the inner zones
-hFar          30.0;    // far-zone max cell
+hFar          60.0;    // far-zone max cell
 
 
 // ************************************************************************* //

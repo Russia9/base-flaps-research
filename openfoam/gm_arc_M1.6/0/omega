@@ -10,5 +10,5 @@ boundaryField
     inlet       { type fixedValue; value uniform $omegaInf; }
     outlet      { type zeroGradient; }
     farfield    { type freestream; freestreamValue uniform $omegaInf; }
-    fuselage    { type omegaWallFunction; value uniform $omegaInf; }
+    "(fuselage|stabilizers)"    { type omegaWallFunction; value uniform $omegaInf; }
 }

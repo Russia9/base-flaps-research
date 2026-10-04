@@ -9,7 +9,7 @@ forces
 {
     type            forces;
     libs            (forces);
-    patches         (fuselage);
+    patches         (fuselage stabilizers);
     writeControl    timeStep;
     writeInterval   1;
     log             no;
@@ -82,6 +82,6 @@ wallShearStress
 {
     type         wallShearStress;
     libs         (fieldFunctionObjects);
-    patches      (fuselage);
+    patches      (fuselage stabilizers);
     writeControl writeTime;
 }

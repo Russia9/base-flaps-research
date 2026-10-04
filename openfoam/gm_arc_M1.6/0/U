@@ -32,7 +32,7 @@ boundaryField
         T               $TInf;
         value           $internalField;
     }
-    fuselage
+    "(fuselage|stabilizers)"
     {
         type            boundaryCorrectedFixedValue;
         value           uniform (0 0 0);

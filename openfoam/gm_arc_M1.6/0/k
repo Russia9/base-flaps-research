@@ -10,5 +10,5 @@ boundaryField
     inlet       { type fixedValue; value uniform $kInf; }
     outlet      { type zeroGradient; }
     farfield    { type freestream; freestreamValue uniform $kInf; }
-    fuselage    { type kLowReWallFunction; value uniform 1e-10; }
+    "(fuselage|stabilizers)"    { type kLowReWallFunction; value uniform 1e-10; }
 }
