@@ -1381,6 +1381,7 @@ class Families:
         self.parent: dict[int, int] = {}
         self.sign: dict[int, int] = {}
         self.conflicts: list[tuple[int, int]] = []
+        self.links: list[tuple[int, int, int]] = []    # coincident (master, slave, sign) across seams
 
     def find(self, c: int) -> tuple[int, int]:
         if self.parent.setdefault(c, c) == c:
@@ -1480,6 +1481,7 @@ def edge_families(topo: Topo) -> Families:
             hit = index.get((key(cv.p), key(cv.q), key(cv.pts[200])))
             if hit:
                 fam.union(hit[0], c, hit[1])
+                fam.links.append((hit[0], c, hit[1]))
     return fam
 
 
@@ -1952,6 +1954,26 @@ def generic_mesh(body: Body, P: dict, info: dict, spec, out: Path, convert: bool
             s += sz[k]
             uu = cv.u_at(s * cv.length / total)
             gmsh.model.mesh.setNode(tags[i], gmsh.model.getValue(1, c, [uu]), [uu])
+    # Coincident seam edges: the slave copies the master's node coordinates.
+    # They are separate curves, and arc-length placement on two B-spline
+    # parametrisations differs by ~1e-6 mm, more than stitchMesh -perfect allows.
+    for cm, cs, sign in fam.links:
+        mt, mc, mu = gmsh.model.mesh.getNodes(1, cm, includeBoundary=False, returnParametricCoord=True)
+        st, _, su = gmsh.model.mesh.getNodes(1, cs, includeBoundary=False, returnParametricCoord=True)
+        if len(mt) != len(st):
+            continue
+        mo = sorted(range(len(mt)), key=lambda i: mu[i])
+        so = sorted(range(len(st)), key=lambda i: su[i])
+        cvm, cvs = topo.curves[cm], topo.curves[cs]
+        if cvm.u[-1] < cvm.u[0]:
+            mo = mo[::-1]
+        if cvs.u[-1] < cvs.u[0]:
+            so = so[::-1]
+        if sign < 0:
+            so = so[::-1]
+        for i, j in zip(mo, so):
+            xyz = list(mc[3 * i:3 * i + 3])
+            gmsh.model.mesh.setNode(st[j], xyz, gmsh.model.getParametrization(1, cs, xyz))
     # seam check: the copied arcs' nodes against their sources'
     worst = 0.0
     for c, (_, _, chain) in gs["targets"].items():
