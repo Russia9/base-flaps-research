@@ -185,7 +185,7 @@ Iterating on solver dicts only: edit the case's `system/*` in place — no
 regeneration step is needed, since `rebuild-mesh.sh` preserves dictionaries.
 Geometry changes always require `rebuild-mesh.sh`.
 
-## Zoned Gmsh mesh (in development, bare body only)
+## Zoned Gmsh mesh (in development)
 
 A case with `system/gmshParams` takes the Gmsh path in `rebuild-mesh.sh`, with
 no OpenSCAD and no snappy:
@@ -210,10 +210,27 @@ outside the sNN log until the finned version is ready.
   (`nTheta` per 45° sector) on both sides, so both facet the cylinder with the
   same chords; only the axial and radial counts may differ.
 - **Every zone is split into hexahedral blocks** (8 sectors of 45°; a 2×2
-  core where the axis is in the fluid). The geometry step checks block count
-  and hexahedral topology (`--geometry-only` stops there). Cylinders are built
-  from eight non-periodic 45° patches, because a periodic face's parameter seam
-  on a sector boundary folds the structured faces next to it.
+  core where the axis is in the fluid). The geometry step checks block count,
+  hexahedral/prism topology and block shape (largest corner angle of every
+  planar block face, < 178°: topology alone passes a reflex block whose cells
+  fold). Cylinders are built from eight non-periodic 45° patches, because a
+  periodic face's parameter seam on a sector boundary folds the structured
+  faces next to it; every seam vertex and patch edge must sit on a block edge.
+- **Fins (geometry step only so far, `openfoam/gm_arc_M1.6`).** A slab
+  x = `xAftStart`..`xSlabEnd` holds the fins and the base with its own
+  circumferential count, so the count changes only across x-planes. Per fin:
+  a wrap `finWrap` mm outside the fin faces and past the tip; above the tip,
+  lines from the wrap's tip corners and the mid arc to r = `rZone` at −45°,
+  0° and −22.5° (the fin's bow tilts the tip towards −Z; a line to +45° gives
+  a 237° corner); between fins, a line from the outer wrap's root to +45°
+  (no sector lines). The LE/TE wedges make the tip wall triangular, which
+  forces prism chains (see the "Fin Tip Funnel" artifact): at the LE a ruled
+  funnel lands the split on the x = z1 circle (conformal); the TE triangle
+  comes from the TE meeting the base rim, so the tip cap behind z2 is its own
+  zone (`cap`, 2 prisms + 2 hexahedra per fin) joined by flat seams
+  `seam_cap<k>_{bottom,top,ci,co,front}`. Body, core and base seams sit on
+  the outer wrap's root line; the body behind `xAftStart` is a separate solid
+  (fusing merges the two cylinders' seams).
 - **Sharp nose**, as in the report (21° tip half-angle, attached shock at
   Ma 1.6; the scad's `R_nose` cap was only for snappy's layers). The nose core
   is a square frustum whose sides leave the tip patch at 45° − β; a ruled
@@ -227,8 +244,13 @@ outside the sNN log until the finned version is ready.
   spacing after Gmsh meshes the curves; far-zone edges use Gmsh's own
   single-ratio progression. The wake is split at `xWakeSplit` so the rim's
   3 µm radial spacing relaxes downstream instead of running the whole wake.
-- **Viewing:** every run writes `surface.vtk` (all block faces, cell data
-  `group`/`zone`/`face`/`minSJ`) for ParaView; `--gui` opens Gmsh.
+- **Viewing:** `--geometry-only` writes a coarse preview mesh,
+  `<case>/preview/case.foam` (`--preview-cells` per block edge, default 4;
+  one cell zone per zone, seams unstitched; converted and checkMesh'd when
+  the OpenFOAM env is sourced). Transfinite prisms collapse at the triangle's
+  widest corner: a fan at the 22.5° TE corner gives slivers that fail
+  checkMesh. Mesh runs write `surface.vtk` (all block faces, cell data
+  `group`/`zone`/`face`/`minSJ`); `--gui` opens Gmsh.
 - Known: ~300 faces > 70° non-orthogonality on the upstream seam disk
   (x = `xZoneStart`, freestream) and ~800 at the tip; checkMesh still passes.
 
