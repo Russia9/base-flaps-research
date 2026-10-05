@@ -43,7 +43,6 @@ finWrap       6;       // wrap layer around each fin (mm)
 hFinChord     2.5;     // max axial cell along the fins
 hFinSpan      2.25;     // max cell along the span, the thickness and the cap (inside the wrap)
 hSlabOuter    3.0;     // max cell in the slab outside the wraps
-finSpanCut    -8;      // span station (deg, arc angle about the fin's centre) where the gaps between fins are cut
 hLE           0.2;     // chordwise cell at the fin LE/TE wedges
 
 // Spacing (mm). Cell counts per edge family follow from these.
