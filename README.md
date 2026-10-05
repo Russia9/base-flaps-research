@@ -129,7 +129,7 @@ It also prints a convergence summary (mean over the last 10% of samples). Use th
 | Parametric geometry | OpenSCAD |
 | Surface mesh export | STL via OpenSCAD |
 | Background mesh | blockMesh (OpenFOAM v2512) |
-| Volume mesh | snappyHexMesh (OpenFOAM v2512); zoned structured Gmsh mesh in development (`scripts/gen_gmsh.py`) |
+| Volume mesh | zoned structured Gmsh mesh (`scripts/gen_mesh.py`, cases with `system/gmshParams`), or snappyHexMesh (OpenFOAM v2512) |
 | CFD solver | HiSA (density-based, pseudo-transient steady state) |
 | Turbulence model | k-ω SST |
 | Post-processing | Python 3 (stdlib only) |
@@ -162,42 +162,153 @@ base-flaps-research/
 │   │       ├── postProcess             # forces, MachNo, schlieren, magGradP, Cp
 │   │       ├── blockMeshDict, snappyHexMeshDict, decomposeParDict, …
 │   ├── arc_no_stab/            # Clean-body baseline, N = 0 (arc minus the stabilizers)
-│   └── gm_no_stab_M1.6/        # Bare body, Ma 1.6, zoned Gmsh mesh (system/gmshParams)
+│   ├── gm_no_stab_M1.6/        # Bare body, Ma 1.6, zoned Gmsh mesh (system/gmshParams)
+│   └── gm_arc_M1.6/            # Finned body (report F1), Ma 1.6, zoned Gmsh mesh
 ├── scripts/
 │   ├── create_case.py          # clone a case's dictionaries, retarget Mach + geometry parameters
-│   ├── gen_gmsh.py             # zoned structured Gmsh mesh (OCC geometry, hex blocks) → mesh.msh
+│   ├── gen_mesh.py             # zoned structured Gmsh mesh → mesh.msh (CLI for scripts/gmesh/)
+│   ├── gmesh/                  # layout (zones, blocks, seams), spacing, checks, export
+│   ├── gen_gmsh.py             # previous Gmsh mesher (cylindrical seams), superseded by gen_mesh.py
 │   ├── wall_breakdown.py       # wall force split: nose/cylinder/fins/base, fin roll by chord
 │   └── post_process.py         # forces.dat → results/<case>/coefficients.csv (Cx..Mz)
-├── rebuild-mesh.sh             # OpenSCAD → STL → blockMesh + parallel snappyHexMesh -overwrite + decompose;
-│                               # with system/gmshParams: gen_gmsh.py → gmshToFoam → stitchMesh → decompose
+├── rebuild-mesh.sh             # with system/gmshParams: gen_mesh.py → gmshToFoam → stitchMesh → decompose;
+│                               # otherwise OpenSCAD → STL → blockMesh + parallel snappyHexMesh + decompose
 ├── run-simulation.sh           # dry-run/solve → reconstructPar → post_process
 └── results/                    # Per-case coefficient CSVs (written by post_process.py)
 ```
 
 Under `openfoam/`, git tracks only each case's dictionaries (`0/`, `system/`, `constant/*Properties`, `case.foam`); meshes, processor directories, time directories and logs are ignored. Validation experiments are created from a baseline case with `create_case.py`, committed one step at a time, and logged in [`EXPERIMENTS.md`](EXPERIMENTS.md).
 
-## Quickstart
+## Building and running cases
 
-Use a Linux shell with OpenFOAM v2512 sourced, for example:
+A case is a directory under `openfoam/` with `0/`, `constant/` and `system/`.
+`rebuild-mesh.sh` builds its mesh and `run-simulation.sh` solves it. Both
+take the case path, and both need OpenFOAM v2512 in the shell
+(`source /path/to/openfoam2512/etc/bashrc`).
+
+### 1. Create the case
+
+Clone an existing case of the same kind with `create_case.py`. It copies the
+dictionaries (including `system/gmshParams`), rewrites
+`constant/caseProperties` and recomputes the Mach-dependent freestream entries:
 
 ```bash
-source /path/to/OpenFOAM-v2512/etc/bashrc
+python3 scripts/create_case.py --template openfoam/gm_arc_M1.6 --case openfoam/gm_arc_M2p0 \
+    --N 4 --xi 79.61 --L 140 --Mach 2.0
 ```
 
-Mesh, validate, and solve the clean-body baseline:
+Clone a finned case for fins (`gm_arc_M1.6`, `arc`) and a bare one for a bare
+body (`gm_no_stab_M1.6`, `arc_no_stab`). The mesh dictionaries follow the
+template, not `--N`. For validation steps, follow [`EXPERIMENTS.md`](EXPERIMENTS.md):
+commit the new dictionaries and push before any meshing.
+
+### 2. Mesh: zoned Gmsh cases (`system/gmshParams`)
+
+Gmsh works in mm. `gen_mesh.py` reads D, N, xi and L from
+`constant/caseProperties` and the layout and spacing from
+`system/gmshParams`. An unknown key in that file is an error.
+
+Check a layout before building the full mesh. This runs locally, with
+`uv`, in seconds:
+
+```bash
+uv run scripts/gen_mesh.py openfoam/gm_arc_M1.6                 # geometry + checks (ALL CHECKS PASSED)
+uv run scripts/gen_mesh.py openfoam/gm_arc_M1.6 --budget        # + cells per zone, largest edge families
+uv run scripts/gen_mesh.py openfoam/gm_arc_M1.6 --geometry-only # + coarse block preview in <case>/preview
+```
+
+The preview is converted and checked when `gmshToFoam` is on `PATH` (on macOS:
+`/Applications/OpenFOAM-v2512.app/Contents/Resources/etc/openfoam -c "uv run …"`).
+Open `<case>/preview/case.foam` in ParaView.
+
+The full mesh needs more memory than a laptop has (about 10 M cells). Build it
+on the CFD server:
+
+```bash
+GMSH_PYTHON=~/venvs/gmsh/bin/python MAX_CELLS=13000000 ./rebuild-mesh.sh openfoam/gm_arc_M1.6
+```
+
+The script runs these steps, about 10 minutes for the finned case:
+1. `gen_mesh.py --volume`
+2. `gmshToFoam -keepOrientation`
+3. scale to metres, and set `fuselage` and `stabilizers` as walls
+4. `stitchMesh` on each of the 32 seam pairs, the inner seams first
+5. remove the emptied seam patches, `decomposePar` and `checkMesh`
+
+The run stops on broken cells, faces or regions. checkMesh's aspect-ratio and
+skewness flags are only printed. The finned mesh still has them at the
+fin-root junctions and along the LE apex.
+
+### 3. Mesh: snappyHexMesh cases
 
 ```bash
 ./rebuild-mesh.sh openfoam/arc_no_stab
-./run-simulation.sh --dry-run openfoam/arc_no_stab
-./run-simulation.sh openfoam/arc_no_stab
 ```
 
-The finned case is the same three commands against `openfoam/arc`. To create a case at a different Mach (or a different fin count), clone an existing one:
+This runs OpenSCAD → STL → blockMesh → parallel `snappyHexMesh -overwrite`,
+then reconstructs and redecomposes. See the notes below for N and the
+`MAX_CELLS` guard.
+
+### 4. Solve
 
 ```bash
-python3 scripts/create_case.py --force --case openfoam/arc_M2p0 --N 4 --xi 79.61 --L 140 --Mach 2.0
-./rebuild-mesh.sh openfoam/arc_M2p0
+./run-simulation.sh --dry-run openfoam/gm_arc_M1.6   # parallel checkMesh of the decomposed case
+./run-simulation.sh openfoam/gm_arc_M1.6             # hisa -parallel → reconstructPar → post_process.py
 ```
+
+`controlDict` sets the iteration budget (`endTime 5000`, one "time" per
+pseudo-time iteration). `startFrom latestTime` makes a stopped run resumable.
+Both scripts use 12 ranks (`NP=<n>` overrides; match `numberOfSubdomains`).
+
+### 5. Running on the CFD server
+
+Runs go on `debian@51.255.94.197`, which has the repo in `~/base-flaps-research`.
+The server never commits. It syncs to what you pushed and keeps its untracked
+cases and meshes:
+
+```bash
+ssh debian@51.255.94.197
+cd ~/base-flaps-research && git fetch && git reset --hard origin/master
+```
+
+Non-interactive shells there have no OpenFOAM environment, and runs take
+hours, so start them in the background from a small script:
+
+```bash
+cat > ~/run_case.sh <<'SCRIPT'
+#!/usr/bin/env bash
+source /usr/lib/openfoam/openfoam2512/etc/bashrc   # before any set -u
+cd ~/base-flaps-research
+GMSH_PYTHON=~/venvs/gmsh/bin/python MAX_CELLS=13000000 ./rebuild-mesh.sh openfoam/gm_arc_M1.6 || exit 1
+./run-simulation.sh openfoam/gm_arc_M1.6
+SCRIPT
+chmod +x ~/run_case.sh && nohup ~/run_case.sh > ~/run_case.log 2>&1 &
+```
+
+To monitor the run:
+- **Progress:** `grep -c "^Time = " openfoam/<case>/log.hisa` gives the iteration count.
+- **Speed:** `grep ExecutionStepTime openfoam/<case>/log.hisa | tail -1`. The 10.9 M finned mesh takes about 38 s per iteration on 12 ranks.
+- **Forces:** `openfoam/<case>/postProcessing/forces*/0/{force,moment}.dat`, in N and N·m.
+- **Memory:** `free -g`. HiSA on 12 ranks fits about 13.3 M cells in 62 GB. Memory grows over the first hundreds of iterations, so don't call a large run safe early.
+
+### 6. Results
+
+`run-simulation.sh` writes `results/<case>/coefficients.csv` and
+`forces.csv` (see "Extracting coefficients"). For the wall split (nose,
+cylinder, fins, base; roll by fin chord), run this with OpenFOAM sourced:
+
+```bash
+python3 scripts/wall_breakdown.py openfoam/gm_arc_M1.6
+```
+
+Copy `results/<case>/` back from the server, then commit and push it from
+your machine:
+
+```bash
+rsync -a debian@51.255.94.197:base-flaps-research/results/gm_arc_M1.6/ results/gm_arc_M1.6/
+```
+
+### Notes
 
 `create_case.py` rewrites `constant/caseProperties` and recomputes the Mach-dependent freestream entries — `UInfMag`, the literal `UInf` vector, `kInf`, and `omegaInf` — in `constant/freestreamProperties`. It does not touch the mesh dictionaries, so the clone inherits the source case's refinement setup. Pass `--N 0` for a clean-body case; `rebuild-mesh.sh` then skips the stabilizer STL entirely. Note that the case's `system/snappyHexMeshDict` and `system/surfaceFeatureExtractDict` must agree with `N` — a clone with `--N 0` from `openfoam/arc` still references `stabilizers.stl`, so clone from `openfoam/arc_no_stab` instead when you want a bare body.
 
@@ -209,7 +320,7 @@ Both tracked cases set `addLayers true` with `nSurfaceLayers 13` (first layer 3 
 
 Before trusting coefficients from a case, require:
 
-- `checkMesh -constant -noZero` reports `Mesh OK`. The current fin meshes still fail this on aspect-ratio and skewness flags at the fin tips. That is a known open issue, not a pass.
+- `checkMesh -constant -noZero` reports no broken cells, faces or regions. Ideally it reports `Mesh OK`. The finned Gmsh mesh still carries aspect-ratio flags at the fin-root junctions and skewness along the LE apex; that is a known open issue, not a pass.
 - `./run-simulation.sh --dry-run <case>` exits cleanly.
 - `postProcessing/forces` contains non-empty force and moment logs.
 - `results/<case>/coefficients.csv` is non-empty.
