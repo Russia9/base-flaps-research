@@ -58,8 +58,8 @@ class Layout:
             self.rays, self.poly_p, self.gamma = fl.rays, fl.poly_p, fl.gamma
             self.p_rays = fl.p_rays
             self.core_rays = starting_at(self.rays, 1)          # corners on the bisector rays
-            self.p_core_rays = starting_at(self.p_rays, 2)      # corners on C
-            self.seam = fl.fin_rays[3]                          # body revolve seam on the gap ray
+            self.p_core_rays = starting_at(self.p_rays, 2)      # corners on E
+            self.body_angles = [r for i, r in enumerate(self.rays) if i % 4 == 3]   # body patches meet on the gap rays
             self.xe = fl.xe
             if not body.total < self.xe < self.x1:
                 raise ValueError("xSlabEnd must lie between the base and xZoneEnd")
@@ -70,7 +70,7 @@ class Layout:
             self.gamma = None
             self.p_rays = self.rays
             self.core_rays = self.p_core_rays = starting_at(self.rays, 1)
-            self.seam, self.xe = 0.0, self.x1
+            self.body_angles, self.xe = self.rays[0::2], self.x1      # through the apex (the core's middle lines)
         self.sleeve = self.gamma or self.poly_p
         # nose core: a square frustum whose sides leave the tip patch at
         # 45 - beta from the axis; half-width a where it meets the ogive
@@ -101,7 +101,7 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
     occ = gmsh.model.occ
     R, total = body.R, body.total
 
-    body_v = O.body_solid(body, L.seam)
+    body_v = O.body_solid(body, L.body_angles)
     fins = O.fin_solids(spec) if spec else []
     occ.synchronize()
     v_body = occ.getMass(*body_v)
@@ -185,7 +185,7 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
             x_t = L.fins.x_t
             tools.append(O.meridional(phi, [(L.xn, 0.0), (x_t, 0.0), (x_t, r_out), (L.xn, r_out)]))
         elif spec:                     # the gap ray: meridional all the way, to the base core behind the base
-            d_b = Core(starting_at(L.fins.root_rays, 2), P["coreWake"]).hit(phi)
+            d_b = Core(starting_at(L.fins.root_rays, 1), P["coreWake"]).hit(phi)
             tools.append(O.meridional(phi, [(L.xn, 0.0), (total - 0.5 * R, 0.0), (total, d_b), (L.xe, d_b),
                                             (L.xe, r_out), (L.xn, r_out)]))
         else:
@@ -217,7 +217,9 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
         tools.append(O.x_prism(core_f.corners(), xa, xb))
         tools += [O.x_strip(p, q, xa, xb) for p, q in core_f.grid_lines()]
         tools.append(O.x_prism(L.poly_p, xa, xb))
-    for x in (L.x0, L.x1):
+    # the far ring is cut where the inner groups change, so each of its seam
+    # faces has a single partner
+    for x in ((L.x0, L.xs, L.xe, L.x1) if spec else (L.x0, L.x1)):
         tools.append(ring_face(x, L.rff, L.p_rays, L.poly_p))
     zones = others("far") | O.fragment(of_group("far"), tools)
 
@@ -257,15 +259,30 @@ def fin_region_tools(L: Layout, P: dict, core_w: Core) -> list:
     """Cutting surfaces from the sleeve twist to xSlabEnd (finlayout)."""
     fl, s, body = L.fins, L.spec, L.body
     R, total = body.R, body.total
-    xs, xe, xt, xu = fl.xs, fl.xe, fl.x_t, fl.x_u
+    xs, xe, xt, xu, xf, xb = fl.xs, fl.xe, fl.x_t, fl.x_u, fl.xf, fl.xb
     z0, z1, z2, z3 = s.z
     Ri, Re, Ro = s.R_in, s.R_edge, s.R_out
+    ri, ro = fl.rho_i, fl.rho_o
+    c = (s.Yc, s.Zc)
+    img = fl.chord_image
     tools = [O.section_face(L.gamma, x) for x in (xt, xu)]                    # sleeve twist ends
-    tools += [O.section_face(L.poly_p, x) for x in (fl.xf, z0, z1, z2, fl.xb)]
+    tools += [O.section_face(L.poly_p, x) for x in (xf, xb)]                  # hood front and back
     tools.append(O.disk_hole(L.poly_p, total, R, fl.root_rays))               # base plane
+    # x = z2 (the barrels' end): everywhere but inside the fins and the
+    # columns above their tip walls (its edge there would split the tip wall)
+    occ = gmsh.model.occ
+    ai, ao = s.a_body(Ri) - 0.05, s.a_body(Ro) - 0.05
+    pts = [O.point((z2, *q)) for q in (s.yz(Ri, ai), s.yz(Ri, fl.tip), img(Ri), img(Ro), s.yz(Ro, fl.tip),
+                                       s.yz(Ro, ao))]
+    cen = O.point((z2, *c))
+    loop = [occ.addCircleArc(pts[0], cen, pts[1]), occ.addLine(pts[1], pts[2]), occ.addLine(pts[2], pts[3]),
+            occ.addLine(pts[3], pts[4]), occ.addCircleArc(pts[4], cen, pts[5]), occ.addLine(pts[5], pts[0])]
+    occ.remove([(0, cen)])
+    notch = (2, occ.addPlaneSurface([occ.addCurveLoop(loop)]))
+    tools += gmsh.model.occ.cut([O.section_face(L.poly_p, z2)], O.rotated_copies([notch], s.N))[0]
     # behind the base: the core, its grid, r = R, and radial separators
     # from the core to where the arcs leave r = R
-    core_b = Core(starting_at(fl.root_rays, 2), P["coreWake"])
+    core_b = Core(starting_at(fl.root_rays, 1), P["coreWake"])   # corners on the bisector roots
     tools += wake_core_tools(core_b, total, xe, R, fl.root_rays)
     for i, phi in enumerate(fl.root_rays):
         if fl.ray_kinds[i % 4] == "g":
@@ -276,34 +293,41 @@ def fin_region_tools(L: Layout, P: dict, core_w: Core) -> list:
     tools += [O.x_strip(g[i], g[(i + 1) % len(g)], xs, xe) for i in range(len(g))]
 
     # per fin (fin 0, then turned copies)
-    c = (s.Yc, s.Zc)
     t = []
     for (rho, q), phi in zip(fl.seps, fl.fin_rays):
         a0 = s.a_body(rho)
         end = at(fl.ray_end(phi), phi)
         t += O.ruled(("line", (xt, *at(R, phi)), (xt, *end)),
                      ("arc", (xu, *s.yz(rho, a0)), (xu, *q), (xu, *c)))              # sleeve twist, from the wall
-        top = s.yz(rho, fl.tip)
-        if rho == Re:                                                              # LE/TE bisectors
-            t += O.x_arc_sweep(c, s.yz(rho, a0 - 0.03), top, xu, z0)
-        else:
-            t += O.x_arc_sweep(c, s.yz(rho, a0 - 0.03), top, xu, z3)
-        t += O.x_arc_sweep(c, s.yz(rho, a0), top, z3, xe)
-    tip_strip = O.loop_face([s.point(fl.rho_i, fl.tip, xs), s.point(fl.rho_o, fl.tip, xs),
-                             s.point(fl.rho_o, fl.tip, xe), s.point(fl.rho_i, fl.tip, xe)])
+        tip = s.yz(rho, fl.tip)
+        t += O.x_arc_sweep(c, s.yz(rho, a0 - 0.03), tip, xu, z0 if rho == Re else z3)   # bisector stops at the LE
+        t += O.x_arc_sweep(c, s.yz(rho, a0), tip, z3, xe)
+    # LE C-grid: diagonals from the hood front's wrap arcs to the barrels'
+    # starts, so the barrels' wall stacks turn round the LE inside the hood
+    for rho, rb in ((ri, Ri), (ro, Ro)):
+        t += O.ruled(("arc", (xf, *s.yz(rho, s.a_body(rho))), (xf, *s.yz(rho, fl.tip)), (xf, *c)),
+                     ("arc", (z1, *s.yz(rb, s.a_body(rb))), (z1, *s.yz(rb, fl.tip)), (z1, *c)))
+    tip_strip = O.loop_face([s.point(ri, fl.tip, xs), s.point(ro, fl.tip, xs), s.point(ro, fl.tip, xe),
+                             s.point(ri, fl.tip, xe)])
     hexagon = O.loop_face([s.point(r, fl.tip, x) for r, x in ((Re, z0), (Ro, z1), (Ro, z2), (Re, z3), (Ri, z2),
                                                                (Ri, z1))])
     t += gmsh.model.occ.cut([tip_strip], [hexagon])[0]                         # tip plane, off the tip wall
-    # the column above the tip plane: its lines carried straight out to P
-    img = fl.chord_image
-    q = s.yz(Re, fl.tip)
-    t += [O.x_strip(q, img(Re), xs, z0), O.x_strip(q, img(Re), z3, xe)]
-    for rho in (Ri, Ro):
-        t.append(O.x_strip(s.yz(rho, fl.tip), img(rho), z1, z2))
-    for (xa, ra), (xb, rb) in (((z0, Re), (z1, Ri)), ((z0, Re), (z1, Ro)), ((z2, Ro), (z3, Re)),
-                               ((z2, Ri), (z3, Re))):
-        t += O.ruled(("line", (xa, *s.yz(ra, fl.tip)), (xb, *s.yz(rb, fl.tip))),
-                     ("line", (xa, *img(ra)), (xb, *img(rb))))
+    # The column above the tip plane carries the plane's layout straight out
+    # to P: every (x, rho) line on it, the tip wall split into a kite at each
+    # wedge (45 deg at the apex) and two strips along the barrels.
+    w = 0.5 * (Ro - Ri)
+    M, N = (z1 + w, Re), (z2 - w, Re)
+    segs = [((xs, Re), (z0, Re)), ((z3, Re), (xe, Re)),                         # bisectors
+            ((xf, ri), (z1, Ri)), ((xf, ro), (z1, Ro)),                         # LE diagonals
+            ((z0, Re), (z1, Ri)), ((z0, Re), (z1, Ro)), ((z2, Ro), (z3, Re)), ((z2, Ri), (z3, Re)),   # wedges
+            ((z1, Ri), (z2, Ri)), ((z1, Ro), (z2, Ro)),                         # barrels
+            ((z1, Ro), M), ((z1, Ri), M), (M, N), (N, (z2, Ro)), (N, (z2, Ri))]  # kites, strips
+    for (xa, ra), (xb_, rb) in segs:
+        if ra == rb:
+            t.append(O.x_strip(s.yz(ra, fl.tip), img(ra), xa, xb_))
+        else:
+            t += O.ruled(("line", (xa, *s.yz(ra, fl.tip)), (xb_, *s.yz(rb, fl.tip))),
+                         ("line", (xa, *img(ra)), (xb_, *img(rb))))
     t += [O.x_strip(p, q_, xs, xe) for p, q_ in fl.outer_lines]
     return tools + O.rotated_copies(t, s.N)
 

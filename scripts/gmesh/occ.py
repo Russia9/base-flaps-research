@@ -156,19 +156,27 @@ def rotated_copies(tools: list[Dt], n: int) -> list[Dt]:
     return out
 
 
-def body_solid(body: Body, seam: float) -> Dt:
-    """The body (apex, ogive arc, cylinder, base) revolved, its parameter seam
-    turned onto phi = seam (a block edge)."""
+def body_solid(body: Body, angles: list[float]) -> Dt:
+    """The body (apex, ogive arc, cylinder, base) as non-periodic patches
+    revolved between the given angles (rad, increasing; block edges) and
+    sewn: a periodic face's parameter seam folds the structured faces that
+    end on it."""
     R, total = body.R, body.total
-    p_apex, p_sh, p_rim, p_base = (point(q) for q in ((0, 0, 0), (body.l_ogive, R, 0), (total, R, 0), (total, 0, 0)))
-    p_c = point((body.xc, body.yc, 0))
-    arc = occ().addCircleArc(p_apex, p_c, p_sh)
-    occ().remove([(0, p_c)])
-    prof = occ().addPlaneSurface([occ().addCurveLoop([arc, occ().addLine(p_sh, p_rim), occ().addLine(p_rim, p_base),
-                                                      occ().addLine(p_base, p_apex)])])
-    vol = [(3, t) for d, t in occ().revolve([(2, prof)], 0, 0, 0, 1, 0, 0, 2 * math.pi) if d == 3]
-    occ().rotate(vol, 0, 0, 0, 1, 0, 0, seam)
-    return vol[0]
+    a = list(angles) + [angles[0] + 2 * math.pi]
+    faces = []
+    for k in range(len(a) - 1):
+        p_apex, p_sh, p_rim = (point(q) for q in ((0, 0, 0), (body.l_ogive, R, 0), (total, R, 0)))
+        p_c = point((body.xc, body.yc, 0))
+        prof = [(1, occ().addCircleArc(p_apex, p_c, p_sh)), (1, occ().addLine(p_sh, p_rim))]
+        occ().remove([(0, p_c)])
+        occ().rotate(prof, 0, 0, 0, 1, 0, 0, a[k])
+        faces += [t for d, t in occ().revolve(prof, 0, 0, 0, 1, 0, 0, a[k + 1] - a[k]) if d == 2]
+    c = point((total, 0, 0))
+    p = [point((total, R * math.cos(t), R * math.sin(t))) for t in a[:-1]]
+    arcs = [occ().addCircleArc(p[k], c, p[(k + 1) % len(p)]) for k in range(len(p))]
+    occ().remove([(0, c)])
+    faces.append(occ().addPlaneSurface([occ().addCurveLoop(arcs)]))
+    return (3, occ().addVolume([occ().addSurfaceLoop(faces, sewing=True)]))
 
 
 def fin_solids(spec: FinSpec) -> list[Dt]:

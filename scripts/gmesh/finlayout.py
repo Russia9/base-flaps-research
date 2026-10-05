@@ -81,21 +81,27 @@ class FinLayout:
         self.gamma = [rotate(p, s.turn(k)) for k in range(s.N) for p in (self.V, self.W)]
         self.G = at(ray_polygon(phi_g, self.gamma), phi_g)
 
-        # P: per fin C (-45 deg), E (0) and D (30); the column above the tip
-        # plane spans C-E
+        # P: one vertex per outer line, per fin (deg in the fin's frame): the
+        # next fin's V at -37.5, It at -30, Ot at 0, W at 30, G at 45. The
+        # line from V keeps the pocket under the bow from pairing Gamma's gap
+        # edge with a line out to P (whose count carries the tip's wall stack):
+        # the gap edges pair with pieces of P instead.
         r_p = P["rZone"]
-        self.p_rays = [math.radians(a) + s.turn(k) for k in range(s.N) for a in (0.0, 30.0, 45.0)]
+        angles = (-37.5, -30.0, 0.0, 30.0, 45.0)
+        self.p_rays = [math.radians(a) + s.turn(k) for k in range(s.N) for a in angles]
         self.poly_p = [at(r_p, a) for a in self.p_rays]
-        self.C, self.E, self.D, self.C1 = (at(r_p, math.radians(a)) for a in (-45.0, 0.0, 30.0, 45.0))
-        self.outer_lines = [(self.It, self.C), (self.Ot, self.E), (self.W, self.D), (self.G, self.C1)]   # fin 0
-        self.outer_up_lines = [(self.V, self.E), (self.W, self.D), (self.G, self.C1)]
+        pv, self.C, self.E, self.D, self.C1 = (at(r_p, math.radians(a)) for a in angles)
+        self.outer_lines = [(self.V, pv), (self.It, self.C), (self.Ot, self.E), (self.W, self.D), (self.G, self.C1)]
+        self.outer_up_lines = [(self.V, pv), (lerp(self.V, self.W, 1 / 3), self.C), (lerp(self.V, self.W, 2 / 3), self.E),
+                               (self.W, self.D), (self.G, self.C1)]
 
     def ray_end(self, phi: float) -> float:
         """Distance along a ray to Gamma."""
         return ray_polygon(phi, self.gamma)
 
     def chord_image(self, rho: float) -> Pt:
-        """Where a tip-plane point at rho lands on P's edge C-E: the column
+        """Where a tip-plane point at rho lands on P's edge C-E (It's and Ot's
+        vertices): the column
         above the tip plane carries its layout straight out to P."""
         return lerp(self.C, self.E, (rho - self.rho_i) / (self.rho_o - self.rho_i))
 

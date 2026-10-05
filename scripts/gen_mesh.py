@@ -23,7 +23,7 @@ from pathlib import Path
 
 import gmsh
 from create_case import parse_scalar
-from gmesh import checks, export, layout, occ, params
+from gmesh import checks, export, layout, mesh, occ, params, spacing
 from gmesh.shapes import Body, FinSpec
 
 
@@ -36,6 +36,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--preview-cells", type=int, default=4, metavar="N",
                     help="cells along every block edge in the preview mesh (default 4)")
     ap.add_argument("--fins", action="store_true", help="build only the fins and compare them with the scad")
+    ap.add_argument("--budget", action="store_true", help="after the checks, print edge families and cells per zone")
+    ap.add_argument("--volume", action="store_true", help="mesh the volume and write <case>/mesh.msh (rebuild-mesh.sh)")
+    ap.add_argument("--test-mesh", action="store_true",
+                    help="mesh the volume into <case>/preview as an OpenFOAM case (with --coarsen for a quick look)")
+    ap.add_argument("--coarsen", type=float, default=1.0, metavar="K", help="divide every cell count by K")
     args = ap.parse_args(argv)
     case = args.case
     try:
@@ -72,6 +77,14 @@ def main(argv: list[str]) -> int:
                 print(f"  {key:28s} {len(surfs)} faces")
         print("checks:")
         print("\n".join(checks.check(body, P, info)))
+        if args.budget or args.volume or args.test_mesh:
+            gs = spacing.spacing(info, P, args.coarsen)
+            print("budget:")
+            print("\n".join(spacing.report(gs)))
+            if args.volume or args.test_mesh:
+                print("volume mesh:")
+                out = case if args.volume else case / "preview"
+                print("\n".join(mesh.volume(info, gs, out, convert=args.test_mesh)))
         if args.geometry_only:
             print(f"preview mesh: {export.preview_mesh(info, case / 'preview', args.preview_cells)}")
         if args.gui:
