@@ -4,7 +4,8 @@ Edges in one family (opposite edges of block faces, the two edges at a
 prism triangle's collapsed corner) share a cell count: the most any member
 needs. Each edge's distribution comes from its two end conditions, grown
 at `growth` up to the edge's size cap:
-  - a wall stack where the edge leaves a wall face of its own block, or
+  - a wall stack where the edge leaves a wall face of its own block (or a
+    flat face continuing a flat wall in its plane), or
     (through the fluid) leaves a wall vertex steeply (the 20 um tip-patch
     cell near the apex);
   - the shear-layer grading where it leaves r = R behind the base (the
@@ -276,6 +277,8 @@ class Rules:
         self.tip = End(P["firstLayerTip"], q)
         self.x45 = info["tip"]["x_45"]
         self.kinds = {f: self.face_kind(f) for f in topo.loops}
+        self.on_wall = {c for f, k in self.kinds.items() if k == "wall" for c in topo.loops[f]}
+        self.mark_wall_extensions()
 
     # ── faces that grade the edges leaving them ────────────────────────
     def face_kind(self, f: int) -> str | None:
@@ -294,6 +297,43 @@ class Rules:
         if self.spec and pts and all(self.on_te_surface(p) for p in pts):
             return "te"
         return None
+
+    def mark_wall_extensions(self):
+        """Flat faces that continue a flat wall in its own plane past a shared
+        edge (the tip plane beside the tip wall, the base plane past the rim)
+        grade like the wall for the blocks on the wall's fluid side: those get
+        the wall stack on every edge leaving the face, consistent with the
+        block on the wall beside them (else their first cells fan out from
+        the corner and fold)."""
+        topo = self.topo
+        self.ext_side: dict[int, tuple] = {}
+        walls_at: dict[int, list[int]] = {}
+        for f, k in self.kinds.items():
+            if k == "wall" and gmsh.model.getType(2, f) == "Plane":
+                for c in topo.loops[f]:
+                    walls_at.setdefault(c, []).append(f)
+
+        def normal(f):
+            pts = face_points(f) or [gmsh.model.getValue(2, f, [0.5, 0.5])]
+            return gmsh.model.getNormal(f, gmsh.model.getParametrization(2, f, list(pts[0])))
+
+        for f, loop in topo.loops.items():
+            if self.kinds[f] or gmsh.model.getType(2, f) != "Plane":
+                continue
+            ws = {w for c in loop for w in walls_at.get(c, [])}
+            n = None
+            for w in ws:
+                n = n or normal(f)
+                nw = normal(w)
+                if abs(sum(n[i] * nw[i] for i in range(3))) > 0.9999:
+                    # the wall's fluid side: towards its block's centre
+                    v = next(v for v, faces in topo.blocks.items() if w in faces)
+                    cw = gmsh.model.occ.getCenterOfMass(3, v)
+                    pw = face_points(w)[0]
+                    side = 1 if sum((cw[i] - pw[i]) * nw[i] for i in range(3)) > 0 else -1
+                    self.kinds[f] = "wall_ext"
+                    self.ext_side[f] = (pw, [side * x for x in nw])
+                    break
 
     def on_te_surface(self, p) -> bool:
         if p[0] < self.spec.z[3] - PAD:
@@ -350,6 +390,13 @@ class Rules:
         return max(r, self.body.R) * (math.pi / 4) / P["nTheta"]
 
     def cap(self, c: int) -> float:
+        """Size cap of edge c: the smallest over its zones and, for an edge on
+        a wall, hWall (wall-tangential cells next to the 3 um first cell)."""
+        if c in self.on_wall:
+            return min(self._cap(c), self.P["hWall"])
+        return self._cap(c)
+
+    def _cap(self, c: int) -> float:
         topo = self.topo
         cv = topo.curves[c]
         zones = topo.edge_zones[c]
@@ -368,13 +415,18 @@ class Rules:
         """(edge, vertex) -> kind of a graded face of the edge's own block that
         the edge leaves at that vertex (one end on the face, not in it)."""
         topo, out = self.topo, {}
-        order = {"wall": 0, "shear": 1, "te": 2, "seam": 3}
+        order = {"wall": 0, "wall_ext": 0, "shear": 1, "te": 2, "seam": 3}
         for v, faces in topo.blocks.items():
             edges = topo.block_edges(v)
             for f in faces:
                 k = self.kinds[f]
                 if not k:
                     continue
+                if k == "wall_ext":                      # only for blocks on the wall's fluid side
+                    pw, nf = self.ext_side[f]
+                    cb = gmsh.model.occ.getCenterOfMass(3, v)
+                    if sum((cb[i] - pw[i]) * nf[i] for i in range(3)) <= 0:
+                        continue
                 corners = {p for c in topo.loops[f] for p in topo.ends[c]}
                 for c in edges - set(topo.loops[f]):
                     on = [p for p in topo.ends[c] if p in corners]
@@ -392,7 +444,7 @@ class Rules:
         """Per edge: (end condition at its start, at its end, size cap)."""
         topo, P, q = self.topo, self.P, self.P["growth"]
         via = self.from_faces()
-        on_wall = {c for f, k in self.kinds.items() if k == "wall" for c in topo.loops[f]}
+        on_wall = self.on_wall
         out = {}
         for c in topo.curves:
             conds = []
@@ -404,7 +456,7 @@ class Rules:
                 # a wall that meets another wall steeply (the body at the base
                 # rim) runs behind that wall's boundary layer.
                 steep_wall = c not in on_wall and (topo.steep(c, p, "fuselage") or topo.steep(c, p, "stabilizers"))
-                if k == "wall" or steep_wall:
+                if k in ("wall", "wall_ext") or steep_wall:
                     cond = self.tip if x < self.x45 + 1e-6 else self.wall
                 elif k == "shear":
                     cond = self.wall if x <= P["xWakeSplit"] + 1e-6 else End(P["hWakeRadial"], q)
