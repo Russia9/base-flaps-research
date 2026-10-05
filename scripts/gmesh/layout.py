@@ -441,7 +441,7 @@ def sample(s: int) -> list:
 def name_faces(L: Layout, zones: dict, zone_group: dict) -> tuple[dict, set]:
     """Physical face groups: walls (fuselage, stabilizers), outer patches,
     shared faces between zones of a group (dropped before writing) and
-    seams seam_<master>_<slave>_<i>, one pair per plane."""
+    seams seam_<master>_<i>_{master,slave}, one pair per plane."""
     owners: dict[int, list[int]] = {}
     for v in zones:
         for _, s in gmsh.model.getBoundary([(3, v)], oriented=False):
@@ -484,13 +484,17 @@ def name_faces(L: Layout, zones: dict, zone_group: dict) -> tuple[dict, set]:
                 seams.setdefault((pair, plane), []).append((s, "master" if group == pair[0] else "slave"))
         if other is None:
             groups.setdefault("fuselage" if on_body(s, L.body) else "stabilizers", []).append(s)
-    by_pair: dict[tuple, list] = {}
-    for pair, plane in seams:
-        by_pair.setdefault(pair, []).append(plane)
-    for pair, planes in by_pair.items():
+    # One pair per master group and plane, its slaves from any group: the far
+    # zone's end disk upstream faces both the sleeve and the outer zone, and
+    # its strips along P all three inner groups (stitch the inner seams
+    # first, so the slaves are one patch). Named seam_<master>_<i>.
+    by_master: dict[str, dict[tuple, list]] = {}
+    for (pair, plane), items in seams.items():
+        by_master.setdefault(pair[0], {}).setdefault(plane, []).extend(items)
+    for master, planes in by_master.items():
         for i, plane in enumerate(sorted(planes)):
-            for s, role in seams[(pair, plane)]:
-                groups.setdefault(f"seam_{pair[0]}_{pair[1]}_{i}_{role}", []).append(s)
+            for s, role in planes[plane]:
+                groups.setdefault(f"seam_{master}_{i}_{role}", []).append(s)
     return groups, shared
 
 
