@@ -255,11 +255,13 @@ build_gmsh_mesh() {
     # GMSH_PYTHON: a Python with the gmsh package (e.g. a venv on the CFD
     # server, which has no uv); otherwise uv provides it.
     if [ -n "${GMSH_PYTHON:-}" ]; then
-        "$GMSH_PYTHON" "$ROOT/scripts/gen_gmsh.py" . --volume 2>&1 | tee log.gmsh
+        "$GMSH_PYTHON" "$ROOT/scripts/gen_mesh.py" . --volume 2>&1 | tee log.gmsh
     else
-        uv run "$ROOT/scripts/gen_gmsh.py" . --volume 2>&1 | tee log.gmsh
+        uv run "$ROOT/scripts/gen_mesh.py" . --volume 2>&1 | tee log.gmsh
     fi
-    gmshToFoam mesh.msh 2>&1 | tee log.gmshToFoam
+    # -keepOrientation: gmshToFoam's own orientation fix flips sound 3 um
+    # wall cells on curved walls into negative volumes
+    gmshToFoam -keepOrientation mesh.msh 2>&1 | tee log.gmshToFoam
     transformPoints -scale 0.001 2>&1 | tee log.transformPoints   # Gmsh works in mm
     foamDictionary constant/polyMesh/boundary -entry entry0/fuselage/type -set wall >/dev/null
     if grep -q "^ *stabilizers$" constant/polyMesh/boundary; then
@@ -270,45 +272,30 @@ build_gmsh_mesh() {
     decomposePar -force
 }
 
-# Join the zone groups (non-conformal, integral mode). gen_gmsh.py names each
-# smooth seam piece seam_<pair>_master / seam_<pair>_slave (the master is the
-# coarser side); each pair is stitched on its own, since across the 90-degree
-# edges between a cylinder and a disk stitchMesh's projection fails.
-# Cylindrical pairs (side*, core_side) go first. stitchMesh and createPatch read the fields,
-# which have no seam entries, so 0/ is moved aside meanwhile.
+# Join the zone groups (non-conformal, ESI stitchMesh integral mode, one pair
+# per call). gen_mesh.py names one pair per master group and plane,
+# seam_<master>_<i>_{master,slave}; every seam is flat with straight edges and
+# off the walls (see scripts/gmesh/layout.py). The inner groups' seams (outer
+# and wake masters) go first, so the slaves of the far zone's seams, which
+# span several groups, are one patch when their turn comes. stitchMesh and
+# createPatch read the fields, which have no seam entries, so 0/ is moved
+# aside meanwhile.
 stitch_gmsh_seams() {
-    local pair pairs n
-    pairs=$(grep -oE "seam_[a-z0-9_]+_master" constant/polyMesh/boundary | sed 's/^seam_//; s/_master$//' \
-        | sort -u | awk '/^side|^core_side/ {print; next} {rest = rest " " $0} END {print rest}')
-    # toleranceDict is read from constant/
-    printf '%s\n' 'FoamFile { version 2.0; format ascii; class dictionary; object toleranceDict; }' \
-        'pointMergeTol 0.01;' 'edgeMergeTol 0.005;' 'nFacesPerSlaveEdge 5;' 'edgeFaceEscapeLimit 10;' \
-        'integralAdjTol 0.05;' 'edgeMasterCatchFraction 0.4;' 'edgeCoPlanarTol 0.8;' 'edgeEndCutoffTol 0.0001;' \
-        > constant/toleranceDict.tight
+    local master pair n
     mv 0 0.fields
-    for pair in $pairs; do
-        # Seams with identical nodes on both sides merge face for face
-        # (-perfect); the face cutting of the integral mode fails on their
-        # coincident points. Seams whose sides differ (the flat ones, the
-        # nose and body side) need the integral mode.
-        if stitchMesh -perfect -overwrite "seam_${pair}_master" "seam_${pair}_slave" \
-                > "log.stitchMesh.$pair" 2>&1; then
-            echo "stitched $pair (perfect)"
-        elif stitchMesh -overwrite "seam_${pair}_master" "seam_${pair}_slave" \
-                > "log.stitchMesh.$pair.integral" 2>&1; then
-            echo "stitched $pair (integral)"
-        elif stitchMesh -overwrite -toleranceDict toleranceDict.tight "seam_${pair}_master" "seam_${pair}_slave" \
-                > "log.stitchMesh.$pair.tight" 2>&1; then
-            # tighter point and edge merging: the default merges points of
-            # the skinny fan faces at a prism's collapsed corner (the tip cap's top)
-            echo "stitched $pair (integral, tight merge)"
-        else
-            rm -rf 0
-            mv 0.fields 0
-            echo "error: stitchMesh failed for the $pair seam; see log.stitchMesh.$pair{,.integral}" >&2
-            exit 1
-        fi
-        rm -rf 0   # stitchMesh writes 0/meshPhi, which the next stitch would read at the old size
+    for master in outer wake far inner; do
+        for pair in $(grep -oE "seam_${master}_[0-9]+_master" constant/polyMesh/boundary \
+                | sed 's/_master$//' | sort -u -t_ -k3 -n); do
+            if stitchMesh -overwrite "${pair}_master" "${pair}_slave" > "log.stitchMesh.$pair" 2>&1; then
+                echo "stitched $pair"
+            else
+                rm -rf 0
+                mv 0.fields 0
+                echo "error: stitchMesh failed for $pair; see log.stitchMesh.$pair" >&2
+                exit 1
+            fi
+            rm -rf 0   # stitchMesh writes 0/meshPhi, which the next stitch would read at the old size
+        done
     done
     printf 'FoamFile { version 2.0; format ascii; class dictionary; object createPatchDict; }\npointSync false;\npatches ();\n' \
         > createPatchDict.removeEmpty
