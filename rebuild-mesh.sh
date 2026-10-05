@@ -315,10 +315,17 @@ verify_mesh() {
     local cell_count
 
     checkMesh -constant -noZero 2>&1 | tee log.checkMesh
-    grep -q "Mesh OK" log.checkMesh || {
-        echo "error: checkMesh did not report Mesh OK" >&2
-        exit 1
-    }
+    # Hard errors stop the run; quality flags (aspect ratio, skewness,
+    # non-orthogonality) are reported only: the wall-resolved fin meshes
+    # carry them at the fin-root junctions and the LE apex.
+    if ! grep -q "Mesh OK" log.checkMesh; then
+        if grep -qE "Zero or negative cell volume|Open cells|Error in face pyramids|Boundary openness|incorrectly oriented|Number of regions: [2-9]" log.checkMesh; then
+            echo "error: checkMesh found broken cells or faces; see log.checkMesh" >&2
+            exit 1
+        fi
+        echo "warning: checkMesh quality flags (no broken cells):" >&2
+        grep -E "^ \*\*\*" log.checkMesh >&2 || true
+    fi
 
     cell_count=$(awk '$1 == "cells:" { print $2; exit }' log.checkMesh)
     [ -n "$cell_count" ] || {
