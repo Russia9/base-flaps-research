@@ -319,7 +319,7 @@ verify_mesh() {
     # non-orthogonality) are reported only: the wall-resolved fin meshes
     # carry them at the fin-root junctions and the LE apex.
     if ! grep -q "Mesh OK" log.checkMesh; then
-        if grep -qE "Zero or negative cell volume|Open cells|Error in face pyramids|Boundary openness|incorrectly oriented|Number of regions: [2-9]" log.checkMesh; then
+        if grep -qE '[*]{3}(Zero or negative cell volume|Open cells|Error in face pyramids|Boundary openness)|incorrectly oriented|Number of regions: [2-9]' log.checkMesh; then
             echo "error: checkMesh found broken cells or faces; see log.checkMesh" >&2
             exit 1
         fi
