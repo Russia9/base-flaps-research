@@ -294,19 +294,23 @@ def fin_region_tools(L: Layout, P: dict, core_w: Core) -> list:
 
     # per fin (fin 0, then turned copies)
     t = []
-    for (rho, q), phi in zip(fl.seps, fl.fin_rays):
-        a0 = s.a_body(rho)
+    for i, ((b0, b1, bc), (h0, h1, hc), phi) in enumerate(zip(fl.low, fl.high, fl.fin_rays)):
         end = at(fl.ray_end(phi), phi)
         t += O.ruled(("line", (xt, *at(R, phi)), (xt, *end)),
-                     ("arc", (xu, *s.yz(rho, a0)), (xu, *q), (xu, *c)))              # sleeve twist, from the wall
-        tip = s.yz(rho, fl.tip)
-        t += O.x_arc_sweep(c, s.yz(rho, a0 - 0.03), tip, xu, z0 if rho == Re else z3)   # bisector stops at the LE
-        t += O.x_arc_sweep(c, s.yz(rho, a0), tip, z3, xe)
-    # LE C-grid: diagonals from the hood front's wrap arcs to the barrels'
-    # starts, so the barrels' wall stacks turn round the LE inside the hood
-    for rho, rb in ((ri, Ri), (ro, Ro)):
-        t += O.ruled(("arc", (xf, *s.yz(rho, s.a_body(rho))), (xf, *s.yz(rho, fl.tip)), (xf, *c)),
-                     ("arc", (z1, *s.yz(rb, s.a_body(rb))), (z1, *s.yz(rb, fl.tip)), (z1, *c)))
+                     ("arc", (xu, *b0), (xu, *b1), (xu, *bc)))                     # sleeve twist, from the wall
+        x_le = z0 if i == 1 else z3                                               # the bisector stops at the LE
+        t += O.x_arc_sweep(bc, b0, b1, xu, x_le) + O.x_arc_sweep(bc, b0, b1, z3, xe)
+        t += O.x_arc_sweep(hc, h0, h1, xs, x_le) + O.x_arc_sweep(hc, h0, h1, z3, xe)
+    # LE C-grid: diagonals from the hood front's separators to the barrels'
+    # starts, so the barrels' wall stacks turn round the LE inside the hood;
+    # in two pieces (below and above Gamma) on the inner side
+    (b0, b1, bc), (h0, h1, _) = fl.low[0], fl.high[0]
+    span_i = s.yz(Ri, fl.a_s)
+    t += O.ruled(("arc", (xf, *b0), (xf, *b1), (xf, *bc)),
+                 ("arc", (z1, *s.yz(Ri, s.a_body(Ri))), (z1, *span_i), (z1, *c)))
+    t += O.ruled(("arc", (xf, *h0), (xf, *h1), (xf, *c)), ("arc", (z1, *span_i), (z1, *s.yz(Ri, fl.tip)), (z1, *c)))
+    t += O.ruled(("arc", (xf, *s.yz(ro, s.a_body(ro))), (xf, *s.yz(ro, fl.tip)), (xf, *c)),
+                 ("arc", (z1, *s.yz(Ro, s.a_body(Ro))), (z1, *s.yz(Ro, fl.tip)), (z1, *c)))
     tip_strip = O.loop_face([s.point(ri, fl.tip, xs), s.point(ro, fl.tip, xs), s.point(ro, fl.tip, xe),
                              s.point(ri, fl.tip, xe)])
     hexagon = O.loop_face([s.point(r, fl.tip, x) for r, x in ((Re, z0), (Ro, z1), (Ro, z2), (Re, z3), (Ri, z2),

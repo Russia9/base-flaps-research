@@ -58,6 +58,24 @@ class FinLayout:
         self.V, self.M, self.W = (s.yz(r, a_s) for r in (self.rho_i, self.Re, self.rho_o))
         self.It, self.Ot = s.yz(self.rho_i, self.tip), s.yz(self.rho_o, self.tip)
         self.seps = ((self.rho_i, self.V), (self.Re, self.M), (self.rho_o, self.W))   # (arc radius, Gamma point)
+        # Below Gamma each separator is an arc from the wall to its Gamma point
+        # (start, end, centre). The inner wrap arc meets the body at only
+        # 22 deg, which folds the wall cells; its place is taken by an arc
+        # that leaves the wall radially a wrap's width from the inner barrel's
+        # root and bends into V. The bisector must stay the LE/TE edge's own
+        # arc (56 deg), the outer wrap meets the wall at 74 deg.
+        c = (s.Yc, s.Zc)
+        phi_b = polar(s.yz(s.R_in, s.a_body(s.R_in)))[1] - d / s.R
+        B = at(s.R, phi_b)
+        u, nrm = (math.cos(phi_b), math.sin(phi_b)), (-math.sin(phi_b), math.cos(phi_b))
+        dv = (self.V[0] - B[0], self.V[1] - B[1])
+        k = (dv[0] ** 2 + dv[1] ** 2) / (2 * (dv[0] * nrm[0] + dv[1] * nrm[1]))
+        self.low = [(B, self.V, (B[0] + k * nrm[0], B[1] + k * nrm[1])),
+                    (s.yz(self.Re, s.a_body(self.Re)), self.M, c),
+                    (s.yz(self.rho_o, s.a_body(self.rho_o)), self.W, c)]
+        # above Gamma: the wrap arcs to the tip plane, and the bisector
+        self.high = [(self.V, self.It, c), (self.M, s.yz(self.Re, self.tip), c), (self.W, self.Ot, c)]
+        assert abs(u[0] * nrm[0] + u[1] * nrm[1]) < 1e-12
         # Sleeve rays through V and W, the bisector's halfway between them (it
         # meets Gamma near M and twists into its arc), and a fourth separator,
         # a meridional ray through the gap 45 deg past the bisector's. The nose
@@ -66,7 +84,7 @@ class FinLayout:
         # the middles cross at the axis, the apex is a block corner, and the
         # body's revolve seam runs along the gap ray.
         self.ray_kinds = ("a", "m", "b", "g")
-        roots = [polar(s.yz(r, s.a_body(r)))[1] for r, _ in self.seps]
+        roots = [polar(lo[0])[1] for lo in self.low]
         phi_v, phi_w = polar(self.V)[1], polar(self.W)[1]
         phi_m = 0.5 * (phi_v + phi_w)
         phi_g = phi_m + math.pi / 4

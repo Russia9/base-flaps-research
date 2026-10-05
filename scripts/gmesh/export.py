@@ -144,7 +144,8 @@ def write_case(info: dict, out: Path, convert: bool = True) -> str:
         shutil.copy(out.parent / "system" / name, out / "system" / name)
     (out / "case.foam").touch()
     shutil.rmtree(out / "constant" / "polyMesh", ignore_errors=True)
-    for cmd in (["gmshToFoam", "mesh.msh"], ["checkMesh", "-constant", "-noZero"]):
+    # -keepOrientation: gmshToFoam's own "fix" flips sound 3 um wall cells on curved walls
+    for cmd in (["gmshToFoam", "-keepOrientation", "mesh.msh"], ["checkMesh", "-constant", "-noZero"]):
         log = out / f"log.{cmd[0]}"
         with log.open("w") as fh:
             subprocess.run(cmd, cwd=out, stdout=fh, stderr=subprocess.STDOUT, check=False)
