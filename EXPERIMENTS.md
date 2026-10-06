@@ -49,6 +49,7 @@ found, and only their results are logged.
 | `arc_M1.6_finvol` | + per-fin boxes (tight level 5 at 4 mm, wide level 4 at 12 mm) | 12.66 | +0.00784 | 49 | 0.668 | gain at the fin TE / base |
 | `arc_M1.6_finwake` | + boxes to x = 0.83/0.89, base-wake cylinder level 4 | 13.30 | +0.00852 | 53 | 0.654 | **baseline**. C_Af 0.454, C_Ab 0.202 |
 | `arc_M1.6_fin6` | finwake with fins (6 7), fuselage (4 5), fin layers 10 @ 1.6 | 12.87 | ≈ 0 | 0 | 0.648 | three changes at once; unexplained, stopped at it. 968 |
+| `gm_arc_M1.6` | wall-conformal zoned Gmsh mesh (no snappy), stopped at it. 1754 | 10.86 | −0.00211 | −13 | 0.630 | **Gmsh baseline**. C_Af 0.432, C_Ab 0.198; TE bevels +0.0019 vs finwake +0.0106 |
 
 ## Steps
 
