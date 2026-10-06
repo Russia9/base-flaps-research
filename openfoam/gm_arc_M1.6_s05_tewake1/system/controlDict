@@ -1,0 +1,63 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2512                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     hisa;
+
+// HiSA is a steady-state pseudo-transient solver: "time" is the outer
+// (pseudo-time) iteration counter, not physical seconds. endTime is the
+// iteration budget; deltaT is fixed at 1. Local time-stepping and the
+// pseudo-CFL ramp live in fvSolution, so adjustTimeStep/maxCo are gone.
+// latestTime makes interrupted runs resumable: a fresh case resolves to 0,
+// while a restart continues from the newest written iteration.
+startFrom       latestTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         5000;
+
+deltaT          1;
+
+writeControl    timeStep;
+
+writeInterval   100;
+
+purgeWrite      0;
+
+writeFormat     binary;
+
+writePrecision  8;
+
+writeCompression off;
+
+timeFormat      general;
+
+timePrecision   6;
+
+graphFormat     raw;
+
+runTimeModifiable true;
+
+#include "../constant/freestreamProperties"
+
+functions
+{
+    #include "postProcess"
+}
+
+
+// ************************************************************************* //

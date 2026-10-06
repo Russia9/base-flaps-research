@@ -291,6 +291,39 @@ To monitor the run:
 - **Forces:** `openfoam/<case>/postProcessing/forces*/0/{force,moment}.dat`, in N and N·m.
 - **Memory:** `free -g`. HiSA on 12 ranks fits about 13.3 M cells in 62 GB. Memory grows over the first hundreds of iterations, so don't call a large run safe early.
 
+### 5b. Running on another machine
+
+Any Linux machine with about 62 GB of memory and 12 cores can run a Gmsh case.
+It needs:
+- OpenFOAM v2512 (openfoam.com), with its `etc/bashrc` sourced;
+- HiSA built against that OpenFOAM, so that `hisa` is on `PATH`;
+- Python 3 with the `gmsh` package (a venv is enough), plus `git`.
+
+```bash
+git clone git@github.com:Russia9/base-flaps-research.git && cd base-flaps-research
+python3 -m venv ~/venvs/gmsh && ~/venvs/gmsh/bin/pip install gmsh
+source /path/to/openfoam2512/etc/bashrc
+C=openfoam/<case>
+GMSH_PYTHON=~/venvs/gmsh/bin/python MAX_CELLS=13000000 ./rebuild-mesh.sh $C   # about 10 min
+./run-simulation.sh $C                                                         # about a day
+python3 scripts/wall_breakdown.py $C
+```
+
+Run the last three commands inside `tmux` (or as one `nohup` script, as in
+step 5) so that they survive a closed terminal. The meshing step prints the
+cell count to `$C/log.gmsh`; compare it with the budget in `EXPERIMENTS.md`.
+
+The finned cases converge in about 1600 of the 5000 iterations. To stop a run
+early and still get the results, set
+
+```bash
+foamDictionary $C/system/controlDict -entry stopAt -set writeNow
+```
+
+HiSA then writes the current iteration and exits, and `run-simulation.sh`
+goes on to `reconstructPar` and `post_process.py`. Don't commit on that
+machine. Copy `results/<case>/` back and commit it from your own.
+
 ### 6. Results
 
 `run-simulation.sh` writes `results/<case>/coefficients.csv` and

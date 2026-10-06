@@ -172,6 +172,19 @@ moves. If neither moves, the near-wake axial resolution is ruled out.
 
 Result: *pending*
 
+### s05: near-wake axial cell 1.0 mm (ladder point between baseline and s04)
+Case `gm_arc_M1.6_s05_tewake1`, baseline `gm_arc_M1.6`. One change in
+`system/gmshParams`: `hRelax` 2.0 → 1.0 mm (s04 has 0.5). Budget 11.58 M
+cells (fins 6.15 M, wake 0.50 M). It runs on a second machine at the same time
+as s04 (README step 5b).
+
+Hypothesis: as s04. With the baseline (2.0) and s04 (0.5), this gives three
+points at a constant refinement ratio of 2. Those give the order of
+convergence and an extrapolated value for the TE-bevel roll and C_Ab.
+Pass: none on its own. It feeds the ladder.
+
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
