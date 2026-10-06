@@ -170,7 +170,11 @@ expansion and the base pressure that load them.
 Pass: TE-bevel roll moves towards finwake's +0.0106 (|Δ| > 0.002), or C_Ab
 moves. If neither moves, the near-wake axial resolution is ruled out.
 
-Result: *pending*
+Result (2026-10-06): **not run.** The mesh built cleanly (13,069,674
+hexahedra, the same checkMesh flags as the baseline), but HiSA was killed by
+the kernel's out-of-memory killer at it. 52 (rank 7 at 4.5 GB). The baseline
+peaks at about 46 GB for 10.86 M cells, about 4.3 GB per million, so about
+12 M cells is the limit on 12 ranks with this mesh. Replaced by s06 (0.7 mm).
 
 ### s05: near-wake axial cell 1.0 mm (ladder point between baseline and s04)
 Case `gm_arc_M1.6_s05_tewake1`, baseline `gm_arc_M1.6`. One change in
@@ -182,6 +186,16 @@ Hypothesis: as s04. With the baseline (2.0) and s04 (0.5), this gives three
 points at a constant refinement ratio of 2. Those give the order of
 convergence and an extrapolated value for the TE-bevel roll and C_Ab.
 Pass: none on its own. It feeds the ladder.
+
+Result: *pending*
+
+### s06: near-wake axial cell 0.7 mm (s04 within the memory limit)
+Case `gm_arc_M1.6_s06_tewake07`, baseline `gm_arc_M1.6`. One change in
+`system/gmshParams`: `hRelax` 2.0 → 0.7 mm. Budget 12.20 M cells, an
+estimated 53 GB peak on the CFD server, which is borderline. With s05 (1.0)
+it gives the ladder 2.0 / 1.0 / 0.7.
+
+Hypothesis and pass: as s04.
 
 Result: *pending*
 
