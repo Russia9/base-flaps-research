@@ -150,6 +150,27 @@ matters and the numerics join the list of error sources.
 
 Result: *pending*
 
+### s04: finer axial cells in the near wake behind the TE (Gmsh mesh)
+Case `gm_arc_M1.6_s04_tewake`, baseline `gm_arc_M1.6` (wall-conformal zoned
+Gmsh mesh, 10.86 M cells; at it. 1500 Mx −0.0021, Cx 0.630, C_Af 0.432,
+C_Ab 0.198). One change in `system/gmshParams`: `hRelax` 2.0 → 0.5 mm. That
+caps the axial cells from the base plane to `xSlabEnd` (x 800–830, across the
+whole slab) and sets the start of the wake zone's axial ramp at x = 830
+(0.5 mm there, `hWake` 4 mm at x = 1200). The bevel itself is already at
+0.2–0.31 mm and does not change. Budget: 13.07 M cells (fins 7.58 M, wake
+0.56 M), close to the 13.3 M that HiSA has survived on 12 ranks.
+
+Hypothesis: the fin LE and flat-surface roll agree across finwake, fin6 and
+the Gmsh mesh, but the TE bevels give +0.0106 in finwake against about
++0.002 in fin6 and Gmsh. finwake's fin boxes reach x = 830/890 at level 5/4
+(0.42/0.83 mm axially); the Gmsh near wake has 2 mm cells from x = 806. The
+TE bevels sit in the base expansion, so a coarse near wake may smear the
+expansion and the base pressure that load them.
+Pass: TE-bevel roll moves towards finwake's +0.0106 (|Δ| > 0.002), or C_Ab
+moves. If neither moves, the near-wake axial resolution is ruled out.
+
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
