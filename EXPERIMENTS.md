@@ -197,7 +197,15 @@ it gives the ladder 2.0 / 1.0 / 0.7.
 
 Hypothesis and pass: as s04.
 
-Result: *pending*
+Result (2026-10-08): **no effect.** Stopped at it. 4391, flat since about
+it. 1500. Mean of the last 100 its: Cx 0.6310, Mx −0.00217 (baseline 0.6301,
+−0.00211). C_Af 0.432, C_Ab 0.199 (baseline 0.432, 0.198). Fin roll by chord
+is identical to the baseline to four decimals: LE +0.0132, flats −0.0172,
+TE bevels +0.0019. Base Cp −0.164 at the axis to −0.209 at r = 25 mm, as before.
+The axial cell behind the TE is ruled out, both for the roll and for C_Ab.
+s05 (1.0 mm) would add nothing and is not needed. The remaining difference
+from finwake is the cross-section resolution of the fin region (finwake
+0.94 mm at level 5, Gmsh 2.25 mm in the hood and 3 mm outside it).
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
