@@ -207,6 +207,36 @@ s05 (1.0 mm) would add nothing and is not needed. The remaining difference
 from finwake is the cross-section resolution of the fin region (finwake
 0.94 mm at level 5, Gmsh 2.25 mm in the hood and 3 mm outside it).
 
+### s07: TE-bevel flow on `gm_arc_M1.6` and `finwake` (no solve)
+Hypothesis: the TE-bevel viscous Cx is negative on the Gmsh mesh (−0.0001
+on both bevels) and positive on finwake, so the Gmsh flow separates on the
+bevels. `scripts/te_map.py` maps Cp and axial skin friction on fin 0 over the
+last 8 mm of chord (0.5 mm bins), in four span bands. It reads the
+`wallSample` written by `wall_breakdown.py`. The bevel runs 4.83 mm, from
+the shoulder at dx ≈ 4.8 mm to the TE at x = 800.
+
+**Result (2026-10-11): confirmed. The Gmsh bevels separate on both sides;
+on finwake only the concave one does.**
+
+| | Gmsh convex | Gmsh concave | finwake convex | finwake concave |
+|---|---|---|---|---|
+| Cf_x on the bevel (×10³) | −0.5 … −1.4 | −0.4 … −1.5 | +0.2 … +4.0 | −0.1 … −1.4 (r > 50 mm) |
+| reversed from | ~0.5 mm past the shoulder, all spans | same | root corner only (r < 50, last 2 mm) | ~1 mm past the shoulder |
+| Cp on the bevel | −0.36 → −0.24 | −0.36 → −0.23 | −0.37 … −0.38, held to the TE | −0.37 → −0.19 |
+
+- On Gmsh the expansion at the shoulder decays straight back to the base
+  pressure (Cp ≈ −0.24) and is the same on both sides, so the TE bevels
+  cancel (+0.0019). On finwake the convex bevel stays attached and holds
+  Cp ≈ −0.37 over the outer three span bands, while the concave bevel
+  separates. That asymmetry is finwake's +0.0106.
+- The Gmsh shoulder also lacks finwake's skin-friction peak (Cf_x ≈ +4·10⁻³
+  over the first 1 mm of the bevel and the last 1 mm of the flat), which
+  suggests the expansion fan at the shoulder is under-resolved.
+- So the roll gap is a separation question on the convex TE bevel, decided
+  in the first ~1 mm past the shoulder. The cells normal to the bevel and
+  across the shoulder are the target of the s09+ ladder. Which mesh is
+  physically right is not known yet.
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
