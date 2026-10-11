@@ -25,6 +25,7 @@ DEFAULTS: dict[str, float] = {
     "hUpstream": 2.0, "hOgive": 1.0, "hShoulder": 0.5, "hWall": 2.0, "hRingOut": 4.0,
     "hRelax": 2.0, "hWake": 4.0, "hWakeRadial": 1.0, "hSeam": 4.0, "hFarMid": 8.0, "hFar": 30.0,
     "hFinChord": 2.0, "hFinSpan": 1.5, "hSlabOuter": 3.0, "hLE": 0.2,
+    "hTEShoulder": 0.0,        # chordwise cell at the TE bevel's shoulder (x = z2); 0: no grading
 }
 INTEGER = ("nTheta", "nLayers")
 _ENTRY = re.compile(r"^\s*([A-Za-z]\w*)\s+([-+0-9.eE]+)\s*;", re.MULTILINE)

@@ -13,7 +13,7 @@ at `growth` up to the edge's size cap:
     leaves a fin's trailing-edge wake surface;
   - the far side's seam size where it leaves a seam face steeply;
   - hShoulder on axial edges at the shoulder, hLE on axial edges at a fin's
-    LE or TE apex line;
+    LE or TE apex line, hTEShoulder (if > 0) at a fin's TE bevel shoulder;
   - otherwise free (the cap).
 Seams are non-conformal, so no counts or nodes are matched across them.
 """
@@ -470,6 +470,10 @@ class Rules:
                       and any(abs(x - z) < 1e-6 for z in (self.spec.z[0], self.spec.z[3]))
                       and any(topo.group_of.get(f) == "stabilizers" for f in topo.at_vertex.get(p, []))):
                     cond = End(P["hLE"], q)                              # chordwise at the LE/TE apex
+                elif (self.spec and P["hTEShoulder"] > 0 and topo.axial(c) > 0.9
+                      and r < self.spec.tip_radius() + 1 and abs(x - self.spec.z[2]) < 1e-6
+                      and any(topo.group_of.get(f) == "stabilizers" for f in topo.at_vertex.get(p, []))):
+                    cond = End(P["hTEShoulder"], q)                      # chordwise at the TE bevel's shoulder
                 else:
                     cond = None
                 conds.append(cond)
