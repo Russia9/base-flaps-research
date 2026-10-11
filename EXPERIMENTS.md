@@ -237,7 +237,33 @@ on finwake only the concave one does.**
   across the shoulder are the target of the s09+ ladder. Which mesh is
   physically right is not known yet.
 
+### s08: chordwise grading at the TE bevel's shoulder (Gmsh mesh)
+Case `gm_arc_M1.6_s08_teshoulder`, baseline `gm_arc_M1.6`. One change in
+`system/gmshParams`: the new key `hTEShoulder` 0 → 0.2 mm. Axial edges
+leaving the fin's TE shoulder (x = z2 = 795.17) now start at 0.2 mm and
+grow at 1.2. Before, the shoulder was a free end: on the bevel the cells
+grew from 0.2 mm at the TE to about 1 mm at the shoulder, and on the flat
+ahead of it they were at the 2.5 mm `hFinChord` cap. The bevel goes from
+10 to 14 chordwise cells. That count is coupled to a sleeve circumferential
+family through the tip column, so the nose and body zones grow as well.
+Budget: 12.02 M cells (baseline 10.86), below s06's 12.20 M, which ran.
+
+Hypothesis: s07 places the separation within ~0.5 mm past the shoulder
+on both bevels. The Gmsh shoulder also lacks finwake's skin-friction peak,
+so the expansion fan there is under-resolved. The cells normal to the
+bevel are not the cause: inside the 6 mm wrap they stay well below the
+`hFinSpan` cap. Resolving the corner chordwise should keep the convex
+bevel attached and move the TE-bevel roll towards finwake's +0.0106.
+Pass: TE-bevel roll moves by more than +0.002, or the convex bevel's
+Cf_x turns positive (`scripts/te_map.py`). If neither happens, the
+shoulder's chordwise resolution is ruled out.
+
+Result: *pending*
+
 ### Planned
+- 90° periodic sector of the Gmsh mesh (4× fewer cells): deferred. Every
+  zone needs one shared side surface at the seam planes x0 and xSlabEnd,
+  so the wake and far zones would need the slab's cross-section layout
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
 - downstream trim (outlet 5.6 → 2.4 m, ~−0.4 M cells), then a small base refinement (level-5 disk x 0.80–0.82)
