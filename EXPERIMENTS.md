@@ -258,7 +258,29 @@ Pass: TE-bevel roll moves by more than +0.002, or the convex bevel's
 Cf_x turns positive (`scripts/te_map.py`). If neither happens, the
 shoulder's chordwise resolution is ruled out.
 
-Result: *pending*
+**Result (2026-10-13): no effect. Ruled out.** 12,017,570 cells, with
+the same checkMesh flags as the baseline. The run was flat from it. 1300
+and stopped at it. 2768; the peak memory was 50 GB.
+
+| | s08 | baseline |
+|---|---|---|
+| Mx (last 100) | −0.00210 | −0.00211 |
+| Cx | 0.6297 | 0.6301 |
+| C_Af / C_Ab | 0.431 / 0.199 | 0.432 / 0.198 |
+| TE bevels concave + convex | −0.0389 + 0.0406 = **+0.0017** | +0.0019 |
+
+- The grading does resolve the shoulder. Cf_x now peaks at +3…+6·10⁻³
+  over the last 1 mm of the flat and the first 0.5 mm of the bevel, as on
+  finwake (`te_map.txt`).
+- Both bevels still reverse from about 0.75 mm past the shoulder, at every
+  span, as in the baseline. The separation is not caused by the
+  under-resolved expansion fan.
+- Remaining differences from finwake at the TE: the cells normal to the
+  bevel past the layer stack (Gmsh grows at 1.2 to ~1 mm inside the
+  wrap), the wake behind the TE across the span, and the numerics
+  (s03 limiter, never run). Gmsh separating symmetrically while finwake
+  stays attached on the convex side could also be a snappy artefact. That
+  is not ruled out.
 
 ### Planned
 - 90° periodic sector of the Gmsh mesh (4× fewer cells): deferred. Every
