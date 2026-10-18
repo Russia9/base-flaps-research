@@ -293,6 +293,9 @@ To monitor the run:
 
 ### 5b. Running on another machine
 
+`SERVER_SETUP.md` lists the exact packages, versions and HiSA commit of the CFD
+server and how to rebuild it from a fresh OS.
+
 Any Linux machine with about 62 GB of memory and 12 cores can run a Gmsh case.
 It needs:
 - OpenFOAM v2512 (openfoam.com), with its `etc/bashrc` sourced;
