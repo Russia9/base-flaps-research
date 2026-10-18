@@ -19,6 +19,8 @@ DEFAULTS: dict[str, float] = {
     # fins
     "xSlabEnd": 900.0,         # end of the fin region (start: xAftStart)
     "finWrap": 6.0,            # hood thickness around each fin
+    # support sting behind the base (fins only); 0: none
+    "stingDiameter": 0.0, "xStingEnd": 1150.0,
     # spacing (mm)
     "nTheta": 16, "firstLayer": 0.003, "layerRatio": 1.2, "nLayers": 20, "growth": 1.1,
     "firstLayerTip": 0.02,

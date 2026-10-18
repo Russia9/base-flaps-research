@@ -26,7 +26,7 @@ import gmsh
 
 from .occ import PAD, real_edges
 
-WALLS = ("fuselage", "stabilizers")
+WALLS = ("fuselage", "stabilizers", "sting")
 
 
 class End:

@@ -14,6 +14,12 @@ polygon Gamma, up to xAftStart) and the fin region (inside P,
 xAftStart..xSlabEnd); outer = between Gamma and P ahead of the fins;
 wake = inside P behind xSlabEnd; far = outside P. See finlayout for the
 fin region's blocks.
+
+Sting (stingDiameter > 0, fins only): a cylinder from the base to
+xStingEnd in its own group, the sleeve: the square of half-width coreWake
+(corners on the outer wrap's root rays) from the base to xZoneEnd, an
+O-grid round the sting and a square core behind its end. It replaces the
+axis cores behind the base; its sides and end are seams.
 """
 
 from __future__ import annotations
@@ -28,7 +34,7 @@ from .polar import Core, at, polygon_area, ray_polygon
 from .shapes import Body, FinSpec, bisect
 
 SQ2 = math.sqrt(2.0)
-RANK = {"far": 0, "outer": 1, "wake": 1, "inner": 2}       # seam master: the lower rank (coarser side)
+RANK = {"far": 0, "outer": 1, "wake": 1, "inner": 2, "sting": 3}   # seam master: the lower rank (coarser side)
 
 
 def starting_at(rays: list[float], i: int) -> list[float]:
@@ -72,6 +78,18 @@ class Layout:
             self.core_rays = self.p_core_rays = starting_at(self.rays, 1)
             self.body_angles, self.xe = self.rays[0::2], self.x1      # through the apex (the core's middle lines)
         self.sleeve = self.gamma or self.poly_p
+        self.r_sting = 0.5 * P["stingDiameter"]
+        if self.r_sting:
+            if not spec:
+                raise ValueError("the sting needs the finned layout")
+            self.x_se = P["xStingEnd"]
+            if not body.total < self.x_se < self.x1:
+                raise ValueError("xStingEnd must lie between the base and xZoneEnd")
+            c = self.fins.root_rays[2]                                 # the outer wrap's root ray
+            self.sting_rays = [c + k * math.pi / 2 for k in range(4)]
+            self.sq = Core(self.sting_rays, P["coreWake"])             # the sleeve's square
+            if not self.r_sting < 0.9 * P["coreWake"]:
+                raise ValueError("the sting must fit inside the sleeve (coreWake)")
         # nose core: a square frustum whose sides leave the tip patch at
         # 45 - beta from the axis; half-width a where it meets the ogive
         a = P["coreTip"]
@@ -89,6 +107,8 @@ class Layout:
             return "far"
         if not self.spec:
             return "inner"
+        if self.r_sting and x > self.body.total and inside((y, z), self.sq.corners()):
+            return "sting"
         if x > self.xe:
             return "wake"
         if x < self.xs and not inside((y, z), self.gamma):
@@ -113,6 +133,9 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
                     "wall_area": sum(occ.getMass(*f) for f in gmsh.model.getBoundary(whole, oriented=False))}
         occ.remove(whole, recursive=True)
     solids = [body_v] + fins
+    if L.r_sting:
+        solids.append(O.x_cylinder(total, L.x_se - total, L.r_sting, L.sting_rays))
+        occ.synchronize()
 
     def overlapping(x0, x1):
         out = []
@@ -131,6 +154,8 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
         zl = [("nose", "inner", L.x0, L.xn, "sleeve"), ("body", "inner", L.xn, L.xs, "sleeve"),
               ("fins", "inner", L.xs, L.xe, "p"), ("outer", "outer", L.x0, L.xs, "p-gamma"),
               ("wake", "wake", L.xe, L.x1, "p"), ("far", "far", L.xin, L.xout, "far")]
+        if L.r_sting:
+            zl.append(("sting", "sting", total, L.x1, "sting"))
     else:
         zl = [("nose", "inner", L.x0, L.xn, "p"), ("body", "inner", L.xn, L.xs, "p"),
               ("aft", "inner", L.xs, L.x1, "p"), ("far", "far", L.xin, L.xout, "far")]
@@ -144,9 +169,13 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
             pieces = [O.x_prism(L.poly_p, x0, x1)]
         elif kind == "p-gamma":
             pieces, _ = occ.cut([O.x_prism(L.poly_p, x0, x1)], [O.x_prism(L.gamma, x0, x1)])
+        elif kind == "sting":
+            pieces = minus_solids(O.x_prism(L.sq.corners(), x0, x1), x0, x1)
         else:
             cyl = O.x_cylinder(x0, x1 - x0, L.rff, L.p_rays)
             pieces, _ = occ.cut([cyl], [O.x_prism(L.poly_p, L.x0, L.x1)])
+        if L.r_sting and name in ("fins", "wake"):          # the sleeve behind the base
+            pieces, _ = occ.cut(pieces, [O.x_prism(L.sq.corners(), max(x0, total), x1)])
         zones |= {v: name for d, v in pieces if d == 3}
     occ.remove(solids, recursive=True)
     occ.synchronize()
@@ -185,7 +214,7 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
             x_t = L.fins.x_t
             tools.append(O.meridional(phi, [(L.xn, 0.0), (x_t, 0.0), (x_t, r_out), (L.xn, r_out)]))
         elif spec:                     # the gap ray: meridional all the way, to the base core behind the base
-            d_b = Core(starting_at(L.fins.root_rays, 1), P["coreWake"]).hit(phi)
+            d_b = (L.sq if L.r_sting else Core(starting_at(L.fins.root_rays, 1), P["coreWake"])).hit(phi)
             tools.append(O.meridional(phi, [(L.xn, 0.0), (total - 0.5 * R, 0.0), (total, d_b), (L.xe, d_b),
                                             (L.xe, r_out), (L.xn, r_out)]))
         else:
@@ -205,11 +234,21 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
         fl = L.fins
         lines = [O.x_strip(p, q, L.x0, L.xs) for p, q in fl.outer_up_lines]
         zones = others("outer") | O.fragment(of_group("outer"), O.rotated_copies(lines, spec.N))
-        core_k = Core(L.p_core_rays, P["coreWake"])
-        tools = [O.meridional(phi, [(L.xe, core_k.hit(phi)), (L.x1, core_k.hit(phi)), (L.x1, P["rZone"]),
-                                    (L.xe, P["rZone"])]) for phi in L.p_rays]
-        tools += wake_core_tools(core_k, L.xe, L.x1, R, L.p_rays)
+        if L.r_sting:
+            # rays from the sleeve's square, also through its corners
+            rays_k = sorted(L.p_rays + L.sting_rays)
+            tools = [O.meridional(phi, [(L.xe, L.sq.hit(phi)), (L.x1, L.sq.hit(phi)),
+                                        (L.x1, ray_polygon(phi, L.poly_p)), (L.xe, ray_polygon(phi, L.poly_p))])
+                     for phi in rays_k]
+            tools.append(O.x_cylinder(L.xe, L.x1 - L.xe, R, rays_k))
+        else:
+            core_k = Core(L.p_core_rays, P["coreWake"])
+            tools = [O.meridional(phi, [(L.xe, core_k.hit(phi)), (L.x1, core_k.hit(phi)), (L.x1, P["rZone"]),
+                                        (L.xe, P["rZone"])]) for phi in L.p_rays]
+            tools += wake_core_tools(core_k, L.xe, L.x1, R, L.p_rays)
         zones = others("wake") | O.fragment(of_group("wake"), tools)
+        if L.r_sting:
+            zones = others("sting") | O.fragment(of_group("sting"), sleeve_tools(L))
     core_f = Core(L.p_core_rays, P["coreFar"])
     tools = [O.meridional(phi, [(L.xin, core_f.hit(phi)), (L.xout, core_f.hit(phi)), (L.xout, L.rff),
                                 (L.xin, L.rff)]) for phi in L.p_rays]
@@ -231,6 +270,21 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
     return {"layout": L, "zones": zones, "zone_list": zl, "zone_group": zone_group, "groups": groups,
             "shared": shared, "fins": fin_info, "body_volume": v_body, "fins_n": spec.N if spec else 0,
             "tip": {"beta": L.beta, "x_a": L.x_a, "x_45": L.x_45, "x_end": L.x_end, "h_in": L.h(L.x0)}}
+
+
+def sleeve_tools(L: Layout) -> list:
+    """The sleeve's O-grid: the corner lines from the sting (behind its end,
+    from a square core of half-width r_sting / 2) to the square, and the
+    planes where its neighbours change (xSlabEnd) and the sting ends."""
+    r, x_se, total, x1 = L.r_sting, L.x_se, L.body.total, L.x1
+    core = Core(L.sting_rays, 0.5 * r)
+    d_sq, d_core = L.sq.hit(L.sting_rays[0]), core.hit(L.sting_rays[0])
+    tools = [O.meridional(phi, [(total, r), (total, d_sq), (x1, d_sq), (x1, d_core), (x_se, d_core), (x_se, r)])
+             for phi in L.sting_rays]
+    tools.append(O.x_prism(core.corners(), x_se, x1))
+    tools.append(O.x_cylinder(x_se, x1 - x_se, r, L.sting_rays))
+    tools += [O.section_face(L.sq.corners(), x) for x in (L.xe, x_se)]
+    return tools
 
 
 def wake_core_tools(core: Core, x0: float, x1: float, R: float, rays: list[float]) -> list:
@@ -282,8 +336,12 @@ def fin_region_tools(L: Layout, P: dict, core_w: Core) -> list:
     tools += gmsh.model.occ.cut([O.section_face(L.poly_p, z2)], O.rotated_copies([notch], s.N))[0]
     # behind the base: the core, its grid, r = R, and radial separators
     # from the core to where the arcs leave r = R
-    core_b = Core(starting_at(fl.root_rays, 1), P["coreWake"])   # corners on the bisector roots
-    tools += wake_core_tools(core_b, total, xe, R, fl.root_rays)
+    if L.r_sting:                                               # the sleeve takes the core's place
+        core_b = L.sq
+        tools.append(O.x_cylinder(total, xe - total, R, fl.root_rays))
+    else:
+        core_b = Core(starting_at(fl.root_rays, 1), P["coreWake"])   # corners on the bisector roots
+        tools += wake_core_tools(core_b, total, xe, R, fl.root_rays)
     for i, phi in enumerate(fl.root_rays):
         if fl.ray_kinds[i % 4] == "g":
             continue                                   # the gap ray runs through (built with the sleeve's)
@@ -425,6 +483,18 @@ def on_body(s: int, body: Body) -> bool:
     return bool(pts)
 
 
+def on_sting(s: int, L: Layout) -> bool:
+    """True if face s lies on the sting (its cylinder or its end disk)."""
+    pts = sample(s)
+    for x, y, z in pts:
+        r = math.hypot(y, z)
+        on_side = abs(r - L.r_sting) < 1e-4 and L.body.total - 1e-6 < x < L.x_se + 1e-6
+        on_end = abs(x - L.x_se) < 1e-6 and r < L.r_sting + 1e-6
+        if not (on_side or on_end):
+            return False
+    return bool(pts)
+
+
 def sample(s: int) -> list:
     """A few points inside face s (a trimmed face's parameter box reaches past the face)."""
     (u0, v0), (u1, v1) = gmsh.model.getParametrizationBounds(2, s)
@@ -469,6 +539,12 @@ def name_faces(L: Layout, zones: dict, zone_group: dict) -> tuple[dict, set]:
         if pts and all(abs(math.hypot(p[1], p[2]) - L.rff) < O.PAD for p in pts):
             groups.setdefault("farfield", []).append(s)
             continue
+        if on_body(s, L.body):
+            groups.setdefault("fuselage", []).append(s)
+            continue
+        if L.r_sting and on_sting(s, L):
+            groups.setdefault("sting", []).append(s)
+            continue
         other = None
         if gmsh.model.getType(2, s) == "Plane" and pts:
             p = pts[len(pts) // 2]
@@ -483,7 +559,7 @@ def name_faces(L: Layout, zones: dict, zone_group: dict) -> tuple[dict, set]:
                 pair = tuple(sorted((group, other), key=lambda g: RANK[g]))
                 seams.setdefault((pair, plane), []).append((s, "master" if group == pair[0] else "slave"))
         if other is None:
-            groups.setdefault("fuselage" if on_body(s, L.body) else "stabilizers", []).append(s)
+            groups.setdefault("stabilizers", []).append(s)
     # One pair per master group and plane, its slaves from any group: the far
     # zone's end disk upstream faces both the sleeve and the outer zone, and
     # its strips along P all three inner groups (stitch the inner seams
@@ -505,10 +581,16 @@ def zone_volume(L: Layout, name: str, kind: str, x0: float, x1: float, fins: dic
     vb = body.integrate(lo, hi)[0] if hi > lo else 0.0
     if kind == "sleeve":
         return polygon_area(L.sleeve) * (x1 - x0) - vb
+    sleeve = 0.0
+    if L.r_sting and name in ("fins", "wake"):
+        sleeve = polygon_area(L.sq.corners()) * (x1 - max(x0, body.total))
+    if kind == "sting":
+        return polygon_area(L.sq.corners()) * (x1 - x0) - math.pi * L.r_sting**2 * (L.x_se - body.total)
     if kind == "p" and name in ("fins", "nose", "body", "aft"):
-        return polygon_area(L.poly_p) * (x1 - x0) - vb - (fins.get("exposed_volume", 0.0) if name == "fins" else 0.0)
+        return (polygon_area(L.poly_p) * (x1 - x0) - vb - sleeve
+                - (fins.get("exposed_volume", 0.0) if name == "fins" else 0.0))
     if kind == "p":
-        return polygon_area(L.poly_p) * (x1 - x0)
+        return polygon_area(L.poly_p) * (x1 - x0) - sleeve
     if kind == "p-gamma":
         return (polygon_area(L.poly_p) - polygon_area(L.gamma)) * (x1 - x0)
     return math.pi * L.rff**2 * (x1 - x0) - polygon_area(L.poly_p) * (L.x1 - L.x0)

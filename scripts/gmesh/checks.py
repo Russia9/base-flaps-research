@@ -30,10 +30,13 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
     v_body, a_lat = body.integrate(0.0, body.total)
     fins = info["fins"]
     a_wall = sum(occ.getMass(2, s) for k in ("fuselage", "stabilizers") for s in info["groups"].get(k, []))
-    row("wall area (mm^2)", a_wall, fins["wall_area"] if fins else a_lat + math.pi * body.R**2)
+    # the sting covers the base's centre: fuselage and fins only, the base an annulus
+    a_sting = math.pi * L.r_sting**2
+    v_sting = a_sting * (L.x_se - body.total) if L.r_sting else 0.0
+    row("wall area (mm^2)", a_wall, (fins["wall_area"] if fins else a_lat + math.pi * body.R**2) - a_sting)
     v_fluid = sum(occ.getMass(3, v) for v in info["zones"])
     row("fluid volume (mm^3)", v_fluid,
-        math.pi * L.rff**2 * (L.xout - L.xin) - v_body - fins.get("exposed_volume", 0.0))
+        math.pi * L.rff**2 * (L.xout - L.xin) - v_body - fins.get("exposed_volume", 0.0) - v_sting)
     for name, _, x0, x1, kind in info["zone_list"]:
         got = sum(occ.getMass(3, v) for v, n in info["zones"].items() if n == name)
         row(f"zone {name} volume (mm^3)", got, zone_volume(L, name, kind, x0, x1, fins))

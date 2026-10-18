@@ -264,9 +264,11 @@ build_gmsh_mesh() {
     gmshToFoam -keepOrientation mesh.msh 2>&1 | tee log.gmshToFoam
     transformPoints -scale 0.001 2>&1 | tee log.transformPoints   # Gmsh works in mm
     foamDictionary constant/polyMesh/boundary -entry entry0/fuselage/type -set wall >/dev/null
-    if grep -q "^ *stabilizers$" constant/polyMesh/boundary; then
-        foamDictionary constant/polyMesh/boundary -entry entry0/stabilizers/type -set wall >/dev/null
-    fi
+    for wall in stabilizers sting; do
+        if grep -q "^ *$wall$" constant/polyMesh/boundary; then
+            foamDictionary constant/polyMesh/boundary -entry entry0/$wall/type -set wall >/dev/null
+        fi
+    done
     rm -f mesh.msh
     stitch_gmsh_seams
     decomposePar -force
