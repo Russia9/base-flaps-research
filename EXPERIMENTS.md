@@ -282,6 +282,37 @@ and stopped at it. 2768; the peak memory was 50 GB.
   stays attached on the convex side could also be a snappy artefact. That
   is not ruled out.
 
+### s09: support sting behind the base (Gmsh mesh)
+Case `gm_arc_M1.6_s09_sting`, baseline `gm_arc_M1.6`. One change: a sting
+of diameter 1.12 in (28.448 mm) from the base to x = 1150, i.e. 4.4 D behind
+the base and past the wake recompression at x ≈ 1000–1050. The size is
+AEDC's sting 4S, "S-1.12F-35.38-1.850M", read as 1.12 in at the model end
+(report PDF p.15, printed p.11). The report gives no sting size for LaRC
+or MDAC.
+
+In `gmshParams`: `stingDiameter 28.448`, `xStingEnd 1150`. The sting is the
+wall patch `sting`, in its own sleeve zone that replaces the axis cores
+behind the base. The `forces` function object still integrates only
+`fuselage` and `stabilizers`, so the sting is not in the coefficients. The
+base becomes an annulus, 87.4 % of the base area. Budget: 11.08 M cells
+(baseline 10.86).
+
+Why: the base pressure was measured on the sting (PDF p.15). The report's
+C_Af = C_A − C_Ab removes the base load. C_Ab and the roll cannot be
+corrected for the sting, so they include it. Our sting-free C_Ab is 0.20;
+the tunnel gives 0.10 (LaRC) and 0.15 (MDAC). The TE bevels, our volatile
+roll term (s07, s08), sit in that base flow.
+
+Hypothesis: the sting raises the base pressure (C_Ab falls towards
+0.10–0.15). That weakens the expansion behind the TE and changes the
+TE-bevel separation and loading. The direction of the roll change is not
+predicted.
+Pass: none; this is a sensitivity test. If |ΔMx| > 0.002, or the TE-bevel
+term changes, the sting matters for the validation. C_Ab is reported two
+ways: the annulus force over S, and −Cp_b over the full base area.
+
+Result: *pending*
+
 ### Planned
 - 90° periodic sector of the Gmsh mesh (4× fewer cells): deferred. Every
   zone needs one shared side surface at the seam planes x0 and xSlabEnd,
