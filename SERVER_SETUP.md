@@ -18,6 +18,7 @@ The versions below are the ones every result in `results/` was produced with.
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake gfortran git rsync screen curl python3-venv
+sudo apt install -y libxft2   # the pip gmsh wheel links libXft even when headless
 
 # OpenFOAM v2512 (ESI): adds /etc/apt/sources.list.d/openfoam.list
 curl -s https://dl.openfoam.com/add-debian-repo.sh | sudo bash
