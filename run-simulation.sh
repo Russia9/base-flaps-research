@@ -144,7 +144,24 @@ run_dry_run() {
 }
 
 run_solver() {
-    mpirun -np "$NP" hisa -parallel 2>&1 | tee log.hisa
+    # One rank per physical core, pinned (BIND=0 turns it off): unpinned ranks
+    # migrate between cores and the two L3 domains and share SMT siblings.
+    # jemalloc (JEMALLOC= turns it off) keeps freed memory mapped, so the
+    # field temporaries HiSA allocates every iteration reuse pages that are
+    # already faulted in instead of fresh mmap'd ones.
+    local mpi_opts=() jemalloc=${JEMALLOC-/usr/lib/x86_64-linux-gnu/libjemalloc.so.2}
+    if [ "${BIND:-1}" != 0 ]; then
+        mpi_opts+=(--map-by core --bind-to core --report-bindings)
+    fi
+    if [ -n "$jemalloc" ]; then
+        if [ -f "$jemalloc" ]; then
+            mpi_opts+=(-x "LD_PRELOAD=$jemalloc"
+                       -x "MALLOC_CONF=retain:true,dirty_decay_ms:-1,muzzy_decay_ms:-1,thp:always")
+        else
+            echo "warning: $jemalloc not found, running with glibc malloc" >&2
+        fi
+    fi
+    mpirun -np "$NP" "${mpi_opts[@]}" hisa -parallel 2>&1 | tee log.hisa
     reconstructPar -latestTime 2>&1 | tee log.reconstructPar
     : > case.foam
 }

@@ -19,6 +19,7 @@ The versions below are the ones every result in `results/` was produced with.
 sudo apt update
 sudo apt install -y build-essential cmake gfortran git rsync screen curl python3-venv
 sudo apt install -y libxft2   # the pip gmsh wheel links libXft even when headless
+sudo apt install -y libjemalloc2   # run-simulation.sh preloads it for HiSA
 
 # OpenFOAM v2512 (ESI): adds /etc/apt/sources.list.d/openfoam.list
 curl -s https://dl.openfoam.com/add-debian-repo.sh | sudo bash
@@ -96,6 +97,11 @@ python3 scripts/te_map.py $C openfoam/gm_arc_M1.6 > results/$(basename $C)/te_ma
 SCRIPT
 chmod +x ~/run_case.sh && nohup ~/run_case.sh > ~/run_case.log 2>&1 < /dev/null &
 ```
+
+`run-simulation.sh` pins one HiSA rank per physical core (`--map-by core
+--bind-to core`; the 9900X has 12 cores, SMT siblings stay idle) and preloads
+jemalloc with retained, never-decayed memory. Set `BIND=0` or `JEMALLOC=` to
+turn either off. Run one case at a time: two pinned runs would share cores 0–11.
 
 Limits measured on this machine:
 - **Memory:** HiSA on 12 ranks uses about 4.3–4.5 GB per million cells at
