@@ -149,7 +149,10 @@ run_solver() {
     # jemalloc (JEMALLOC= turns it off) keeps freed memory mapped, so the
     # field temporaries HiSA allocates every iteration reuse pages that are
     # already faulted in instead of fresh mmap'd ones.
-    local mpi_opts=() jemalloc=${JEMALLOC-/usr/lib/x86_64-linux-gnu/libjemalloc.so.2}
+    # Single node: shared memory only. With tcp enabled, Open MPI opened TCP
+    # connections between local ranks, and one stalled handshake
+    # (mca_btl_tcp_recv_blocking) froze a whole run inside MPI_Allreduce.
+    local mpi_opts=(--mca btl self,sm) jemalloc=${JEMALLOC-/usr/lib/x86_64-linux-gnu/libjemalloc.so.2}
     if [ "${BIND:-1}" != 0 ]; then
         mpi_opts+=(--map-by core --bind-to core --report-bindings)
     fi
