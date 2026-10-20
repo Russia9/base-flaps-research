@@ -311,7 +311,33 @@ Pass: none; this is a sensitivity test. If |ΔMx| > 0.002, or the TE-bevel
 term changes, the sting matters for the validation. C_Ab is reported two
 ways: the annulus force over S, and −Cp_b over the full base area.
 
-Result: *pending*
+**Result (2026-10-20): no effect, on the roll or on the base pressure.**
+11,081,062 cells. All 40 seams stitched, including the sleeve's. checkMesh
+gave no broken cells; max skewness was 6.46 (baseline 6.03). The run was
+flat from it. 1000 and stopped at it. 1762, at 38.5 s/it and 44 GB.
+
+| | s09 | baseline |
+|---|---|---|
+| Mx (last 100) | −0.00209 | −0.00211 |
+| C_A (gauge pressure, `wall_breakdown`) | 0.610 | 0.630 |
+| C_Af | 0.4325 | 0.432 |
+| C_Ab, annulus force / S (area 0.873 S) | 0.177 | 0.198 |
+| base Cp, mean (= C_Ab over the full base area) | −0.20 (−0.194 … −0.208) | −0.198 (−0.16 … −0.21) |
+| LE / TE bevels concave + convex | +0.0133 / +0.0019 | +0.0133 / +0.0019 |
+
+- The base pressure is unchanged. The lower C_Ab is only the area the
+  sting covers. The convex TE bevel still has reversed flow at every span
+  (`te_map.txt`, the same as s08's table).
+- **`coefficients.csv` Cx (0.680) is wrong by +0.0706.** The `forces`
+  object integrates absolute p (`pRef` 0). Without the sting's disk the
+  walls are not closed, which adds p∞·πr_s²/(q∞S) = 0.0706. The viscous
+  parts agree (0.0891) and Mx is unaffected (the disk is on the axis). Use
+  the `wall_breakdown` C_A. The case's `forces` now has `pRef $pInf`, so
+  clones of it are correct.
+- A sting of d/D = 0.36 is ruled out as the cause of the C_Ab gap
+  (0.20 vs 0.10–0.15) and of the roll deficit.
+- `wall_breakdown.py` failed at first on stitched faces with more than 10
+  vertices, which OpenFOAM writes over several lines; the parser is fixed.
 
 ### Planned
 - 90° periodic sector of the Gmsh mesh (4× fewer cells): deferred. Every
