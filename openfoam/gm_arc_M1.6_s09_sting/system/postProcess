@@ -15,6 +15,9 @@ forces
     log             no;
     CofR            (0 0 0);
     rho             rho;
+    // gauge pressure: with the sting the integrated walls are not closed
+    // (the base is an annulus), so absolute p would add pInf * pi r_s^2
+    pRef            $pInf;
 }
 
 MachNo
