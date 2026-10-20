@@ -65,7 +65,15 @@ def read_vectors(path: Path) -> list[tuple[float, ...]]:
 
 
 def read_faces(path: Path) -> list[list[int]]:
-    return [list(map(int, v.split())) for v in re.findall(r"\d+\(([^()]+)\)", list_body(path))]
+    # n(a b c) on one line, or for n > 10 (stitched seam polygons) n, then
+    # one label per line between ( and ): read it as tokens
+    tok = re.findall(r"\d+|[()]", list_body(path))
+    faces, i = [], 0
+    while i < len(tok):
+        n = int(tok[i])
+        faces.append([int(t) for t in tok[i + 2:i + 2 + n]])
+        i += n + 3
+    return faces
 
 
 def patch_faces(sample: Path, patch: str):
