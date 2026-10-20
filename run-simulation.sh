@@ -5,23 +5,26 @@ set -euo pipefail
 # emit coefficient CSV output.
 #
 # Usage:
-#   ./run-simulation.sh [--dry-run] [case-dir]
+#   ./run-simulation.sh [--dry-run | --resume] [case-dir]
 #
 # --dry-run validates the decomposed mesh in parallel (checkMesh); hisa itself
-# has no -dry-run option.
+# has no -dry-run option. --resume keeps the time directories and continues
+# from the latest one (controlDict: startFrom latestTime); the previous
+# log.hisa is kept as log.hisa.prev.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # ── configuration (env overridable) ──────────────────────────────────────────
 CASE_ARG=openfoam/arc
 DRY_RUN=0
+RESUME=0
 NP=${NP:-12}
 DEPENDENCIES="mpirun hisa checkMesh foamListTimes reconstructPar"
 FIELDS="U p T k omega nut alphat"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 usage() {
-    sed -n '1,10p' "$0" >&2
+    sed -n '1,12p' "$0" >&2
 }
 
 need_command() {
@@ -61,6 +64,9 @@ parse_args() {
         case "$1" in
             --dry-run)
                 DRY_RUN=1
+                ;;
+            --resume)
+                RESUME=1
                 ;;
             -h|--help)
                 usage
@@ -177,7 +183,11 @@ main() {
     preflight
 
     pushd "$CASE" >/dev/null
-    clean_outputs
+    if [ "$RESUME" -eq 1 ]; then
+        [ -f log.hisa ] && mv log.hisa log.hisa.prev
+    else
+        clean_outputs
+    fi
 
     if [ "$DRY_RUN" -eq 1 ]; then
         run_dry_run
