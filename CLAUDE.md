@@ -55,12 +55,35 @@ environment for its `postProcess` sampling pass.
 
 ## Validation target
 
-Report B1F1 at Ma 1.6, α = 0, φ = 0 gives `C_ℓ = −0.016`, with
-`S_ref = πd²/4` and `L_ref = d`. That is the same normalisation as
-`post_process.py`, so the target is **`Mx = +0.016`** in our sign convention
-(see the sign note below). Acceptance is at least 80 % of that,
-`Mx ≥ +0.0128`. A second facility (MDAC S-256, fin-only roll) reads about
-−0.010, so the experimental spread is itself large.
+**Primary target (since 2026-10-21): the fin-only roll.** Report B1F1 at
+Ma 1.6, α = 0, φ = 0, MDAC S-256 "rolling moment due to fin" (dataset CX5C04,
+PDF p.62) gives `C_ℓ = −0.0094`, i.e. **`Mx = +0.0094`** in our sign
+convention (see the sign note below). The uncertainty band is the measured
+φ scatter, which should be zero at α = 0 by the 4-fold symmetry: fin-only is
+−0.0057 at φ = 22.5 and −0.0130 at φ = 45, so **`Mx` +0.006 … +0.013 passes**.
+
+Why fin-only: our body is smooth, so it carries < 2 % of the roll; the CFD roll
+*is* fin roll. The measured totals (LaRC CT9S08 −0.016, MDAC DX5B04 −0.023
+at φ = 0; −0.015 … −0.029 over φ) are 1.4–4× the fin-only values at every
+Mach. That gap is model hardware (fin-root fittings, balance gaps) or data
+reduction we don't model. The totals stay as an upper reference only.
+
+Assumptions behind the comparison, which the original data reports (refs 1–6)
+could overturn:
+- The fin-only curve is body-referenced (`S_ref = 12.566 in²`, `L_ref = 4 in`),
+  like the totals it is plotted with (Appendix A header, nomenclature
+  `C_ℓα=0` on PDF p.25). The p.18 formula `C_ℓ = B/2D·ΣC_BM + R/D·ΣC_NF`
+  shows no `S_f/S` factor, although basic fin coefficients use the panel area
+  `S_f = 18.48 in²` (p.17); we read the formula as shorthand.
+- `C_NF` points perpendicular to the radius line through the fin root (Fig. 3,
+  CNF1), with `R` the body radius and `B/2` the exposed semi-span. Then the
+  formula is exactly the fin roll about the body axis, the value we compute
+  (checked on s09: identical to 5 decimals). If `C_NF` were normal to the fin
+  surface, the formula would be about 0.0014 smaller in magnitude.
+
+Standing (Ma 1.6): `finwake` Mx +0.0086 (92 %, pass); the Gmsh family
+(`gm_arc_M1.6`, s06, s08, s09) +0.0020 to +0.0022 C_ℓ, i.e. Mx −0.002 (wrong
+sign, fail). Digitized B1/B1F1 data: `literature/*.csv`.
 
 Axial force targets from the same report (circle series, Ma 1.6, α = 0):
 `C_Af ≈ 0.40` (forebody, `C_A − C_Ab`) and `C_Ab ≈ 0.10` (base, over the full

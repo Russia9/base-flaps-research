@@ -7,7 +7,7 @@ plus `results/<case>/wall_breakdown.csv` for the base/forebody split.
 
 | Metric | Target | Acceptance |
 |---|---|---|
-| `Mx` (= −C_ℓ) | +0.016 | ≥ +0.0128 (80 %) |
+| `Mx` (= −C_ℓ), fin-only roll (MDAC CX5C04) | +0.0094 | +0.006 … +0.013 (φ scatter) |
 | C_Af (forebody) | 0.40 | report only |
 | C_Ab (base, full base area) | 0.10 | report only |
 
@@ -363,6 +363,36 @@ run (candidates 1.2, 1.3, 1.9, 2.36, 2.86, then transonic). Each is a
 first run with core pinning and jemalloc.
 
 Result: *pending*
+
+### Target change (2026-10-21): compare the fin-only roll
+The report's own data (user-digitized B1F1 in `literature/`) show:
+- At α = 0 the 4-fin model should not depend on φ, but MDAC's total reads
+  −0.0227 / −0.0287 / −0.0229 at φ = 0 / 22.5 / 45 at Ma 1.6, and LaRC reads
+  −0.0163 / −0.0149 at φ = 0 / 45. The measured repeatability is ±0.003 or
+  more.
+- At every Mach the fin-only roll ("rolling moment due to fin", fin-balance
+  sum) is 22–77 % of the total. Our smooth body carries < 2 % of the roll,
+  so the CFD roll is fin roll and the total includes hardware we don't model.
+
+The target is now the MDAC fin-only C_ℓ = −0.0094 at Ma 1.6, φ = 0
+(`Mx = +0.0094`), with the φ scatter (`Mx` +0.006 … +0.013) as the pass band.
+`CLAUDE.md` → Validation target lists the assumptions: S_ref 12.566 in²,
+and C_NF perpendicular to the root radius line, which makes the p.18
+formula equal to the exact fin roll; checked on s09.
+
+Re-scored at Ma 1.6:
+
+| Case | Mx (fin roll) | vs +0.0094 |
+|---|---|---|
+| `finwake` | +0.0086 | 92 %, **pass** |
+| `finvol` | +0.0078 | 83 %, pass |
+| `s02` | +0.0059 | 63 %, borderline (edge of the band) |
+| `fin6` | ≈ 0 | fail |
+| Gmsh `gm_arc_M1.6`, s06, s08, s09 | −0.0020 … −0.0022 | wrong sign, fail |
+
+The open question is unchanged: snappy keeps the convex TE bevel attached and
+lands in the band; Gmsh separates both bevels (s07, s08) and gets the wrong
+sign. Which TE flow is physical decides it.
 
 ### Planned
 - 90° periodic sector of the Gmsh mesh (4× fewer cells): deferred. Every
