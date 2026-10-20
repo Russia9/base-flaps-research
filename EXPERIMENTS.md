@@ -339,6 +339,31 @@ flat from it. 1000 and stopped at it. 1762, at 38.5 s/it and 44 GB.
 - `wall_breakdown.py` failed at first on stitched faces with more than 10
   vertices, which OpenFOAM writes over several lines; the parser is fixed.
 
+### s10: bare body B1 against the report over Mach, Ma 1.6 first
+Case `gm_b1_M1.6`: `gm_no_stab_M1.6`'s bare-body case (BCs, `postProcess`)
+with `gm_arc_M1.6`'s `gmshParams`, i.e. the finned baseline's mesh without
+the fins. Budget 6.20 M cells (the old `gm_no_stab_M1.6` is 9.6 M, with
+nTheta 16 and a finer layer stack).
+
+Why: our base pressure is C_Ab ≈ 0.20 with fins and 0.175 on the bare body,
+against the report's B1F1 0.10 (LaRC) or 0.15 (MDAC), and B1 alone 0.086.
+In both series the report's Ma 1.6 point is a dip: B1 alone goes 0.22 at
+Ma 1.3, 0.086 at 1.6, 0.14 at 1.9. Reference: B1 alone, AEDC DT9B01,
+digitized by the user in `literature/B1_MainBalance_{1,2,3}.csv`
+(report PDF p.55–57).
+
+Hypothesis: if our C_Ab and C_Af follow the tunnel at the Mach numbers
+around 1.6, the 1.6 point is a tunnel artefact and the base flow needs no
+numerics or turbulence-model change. If we sit about 2× high everywhere,
+the base flow itself is wrong.
+Plan: Ma 1.6 first, which also checks the grid against `gm_no_stab_M1.6`
+(C_Ab 0.175, C_Af 0.230). Its cost decides how many more Mach numbers to
+run (candidates 1.2, 1.3, 1.9, 2.36, 2.86, then transonic). Each is a
+`create_case.py --template openfoam/gm_b1_M1.6 --Mach M` clone. This is the
+first run with core pinning and jemalloc.
+
+Result: *pending*
+
 ### Planned
 - 90° periodic sector of the Gmsh mesh (4× fewer cells): deferred. Every
   zone needs one shared side surface at the seam planes x0 and xSlabEnd,
