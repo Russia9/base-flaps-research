@@ -152,9 +152,10 @@ run_dry_run() {
 run_solver() {
     # One rank per physical core, pinned (BIND=0 turns it off): unpinned ranks
     # migrate between cores and the two L3 domains and share SMT siblings.
-    # jemalloc (JEMALLOC= turns it off) keeps freed memory mapped, so the
-    # field temporaries HiSA allocates every iteration reuse pages that are
-    # already faulted in instead of fresh mmap'd ones.
+    # jemalloc (JEMALLOC= turns it off) keeps freed memory mapped for 30 s, so
+    # the field temporaries HiSA frees and reallocates within one iteration
+    # (~20 s) reuse pages that are already faulted in. Decay must stay
+    # finite: with it off, RSS grew without bound and s10 was OOM-killed.
     # Single node: shared memory only. With tcp enabled, Open MPI opened TCP
     # connections between local ranks, and one stalled handshake
     # (mca_btl_tcp_recv_blocking) froze a whole run inside MPI_Allreduce.
@@ -165,7 +166,7 @@ run_solver() {
     if [ -n "$jemalloc" ]; then
         if [ -f "$jemalloc" ]; then
             mpi_opts+=(-x "LD_PRELOAD=$jemalloc"
-                       -x "MALLOC_CONF=retain:true,dirty_decay_ms:-1,muzzy_decay_ms:-1,thp:always")
+                       -x "MALLOC_CONF=background_thread:true,dirty_decay_ms:30000,muzzy_decay_ms:30000")
         else
             echo "warning: $jemalloc not found, running with glibc malloc" >&2
         fi

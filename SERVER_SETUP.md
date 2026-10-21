@@ -99,9 +99,11 @@ chmod +x ~/run_case.sh && nohup ~/run_case.sh > ~/run_case.log 2>&1 < /dev/null 
 ```
 
 `run-simulation.sh` pins one HiSA rank per physical core (`--map-by core
---bind-to core`; the 9900X has 12 cores, SMT siblings stay idle) and preloads
-jemalloc with retained, never-decayed memory. Set `BIND=0` or `JEMALLOC=` to
-turn either off. Run one case at a time: two pinned runs would share cores 0–11.
+--bind-to core`; the 9900X has 12 cores, SMT siblings stay idle), keeps MPI on
+shared memory (`--mca btl self,sm`; TCP between local ranks once hung a run),
+and preloads jemalloc, which returns memory unused for 30 s (never-decaying
+memory grew until a run was OOM-killed). Set `BIND=0` or `JEMALLOC=` to turn
+either off. Run one case at a time: two pinned runs would share cores 0–11.
 
 Limits measured on this machine:
 - **Memory:** HiSA on 12 ranks uses about 4.3–4.5 GB per million cells at
