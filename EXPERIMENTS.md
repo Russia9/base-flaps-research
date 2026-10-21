@@ -381,7 +381,12 @@ with one aspect-ratio flag (552 cells) and no broken cells. Flat from it. 1300
   memory never went back to the kernel (42 GB at it. 592 on a ~27 GB case).
   Reconstructed and post-processed by hand at it. 1800.
 
-Other Mach numbers: pending.
+Other Mach numbers: `gm_b1_M1.3` and `gm_b1_M1.9`, the neighbours of the
+report's Ma 1.6 dip, run in sequence (`create_case.py --template
+openfoam/gm_b1_M1.6 --Mach M`; same mesh, same freestream p and T, so
+Re ∝ U). Report B1 C_Ab / C_Af: Ma 1.3 0.220 / 0.239, Ma 1.9 0.140 / 0.096.
+If ours land near those values, the 1.6 point is the tunnel's outlier.
+Result: *pending*
 
 ### Target change (2026-10-21): compare the fin-only roll
 The report's own data (user-digitized B1F1 in `literature/`) show:
