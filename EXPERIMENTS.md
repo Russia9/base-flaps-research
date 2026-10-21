@@ -362,7 +362,26 @@ run (candidates 1.2, 1.3, 1.9, 2.36, 2.86, then transonic). Each is a
 `create_case.py --template openfoam/gm_b1_M1.6 --Mach M` clone. This is the
 first run with core pinning and jemalloc.
 
-Result: *pending*
+**Result, Ma 1.6 (2026-10-21):** 6,199,936 cells, 10 seams stitched, checkMesh
+with one aspect-ratio flag (552 cells) and no broken cells. Flat from it. 1300
+(Cx 0.4079 → 0.4091 at it. 1847), 19.9 s/it, so about 7 h to converge.
+
+| B1 alone, Ma 1.6 | C_Af | C_Ab (= −Cp_b mean) | C_A |
+|---|---|---|---|
+| s10, 6.2 M | 0.228 | 0.181 | 0.409 |
+| `gm_no_stab_M1.6`, 9.6 M | 0.230 | 0.175 | 0.405 |
+| report B1 (AEDC DT9B01) | 0.167 | 0.086 | 0.253 |
+
+- Grid-independent at this level (C_Af 1 %, C_Ab 3.5 %). The gap to the
+  tunnel is not resolution.
+- Base Cp −0.151 on the axis to −0.190 at r = 25 mm.
+- Run history: hung at it. 248 on an Open MPI TCP handshake (fixed with
+  `--mca btl self,sm`, c24e931, resumed with `--resume`). Then SIGKILL at
+  it. 1847, almost certainly OOM: with jemalloc's decay disabled, freed
+  memory never went back to the kernel (42 GB at it. 592 on a ~27 GB case).
+  Reconstructed and post-processed by hand at it. 1800.
+
+Other Mach numbers: pending.
 
 ### Target change (2026-10-21): compare the fin-only roll
 The report's own data (user-digitized B1F1 in `literature/`) show:
