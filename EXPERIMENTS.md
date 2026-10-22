@@ -424,6 +424,44 @@ were reduced is in the original data reports (refs 1–6, p.17), which we
 don't have. The axial targets move to MDAC DX5B04 (table above), with
 LaRC as a lower reference. Results: `results/gm_b1_M1.{3,6,9}/`.
 
+### s11: first wall cell on the TE bevels, `finwake` vs Gmsh (no solve)
+Hypothesis: `finwake`'s convex TE bevel stays attached because snappy drops
+the layer stack at the sharp fin edges (the ~4 mm staircase band known since
+the September layer fix), so its wall cell there is coarse (high y⁺), while
+the Gmsh mesh keeps 3 µm and separates.
+Method: `finwake` re-meshed unchanged on the new server (13,298,786 cells,
+fin layers 12.1/13, 97.1 %). `scripts/first_cell.py` samples the wall cells'
+centres onto the fin patch and reports h1 = 2 × the face-to-centre wall
+distance. Validated on s09 (Gmsh): 2.4–4.0 µm on every fin surface, no face
+above 10 µm.
+
+**Result (2026-10-22): rejected.** `finwake`, fin 0, r = 50–80 mm, h1 in µm:
+
+| Distance before TE | Convex bevel | Concave bevel |
+|---|---|---|
+| 4.75 mm (shoulder at 4.83) | 2.8–3.1 | 2.9–3.1 |
+| 4.25 mm (Gmsh separates here, s07/s08) | 3.3–4.1 | 3.9–4.3 |
+| 3.25 mm | 7–9 | 8 |
+| 1.75 mm | 19–22 | 22 |
+| 0.25 mm (TE edge) | 140–170 | 160–170 |
+
+- Where the Gmsh flow separates, both meshes have a 3–4 µm wall cell.
+- The layer collapse is real (median 33 µm, p90 147 µm over all TE
+  bevels), but it builds up downstream of the separation point and is the
+  same on both sides, while only the convex side stays attached on finwake.
+- Still different between the meshes: chordwise cells along the bevel
+  (snappy 0.2–0.4 mm; Gmsh graded at the shoulder only, growing towards
+  ~1 mm), bevel-normal cells past the 0.6 mm stack (snappy 0.2–0.5 mm; Gmsh
+  ratio 1.2 to the 2.25 mm cap, ~1 mm at the wrap edge), and the turbulence
+  model question.
+
+Next: s12, refine the Gmsh TE region (along and off the bevel) to snappy's
+level, to test whether the Gmsh separation is grid-converged before any
+turbulence-model comparison (SA, then EBRSM). In parallel, the user checks
+the TE geometry in the report (bevel sides, shoulder radius, BL trip).
+Results: `results/arc_M1.6_finwake/first_cell.txt`,
+`results/gm_arc_M1.6_s09_sting/first_cell.txt`.
+
 ### Target change (2026-10-21): compare the fin-only roll
 The report's own data (user-digitized B1F1 in `literature/`) show:
 - At α = 0 the 4-fin model should not depend on φ, but MDAC's total reads
