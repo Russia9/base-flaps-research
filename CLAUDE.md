@@ -138,6 +138,26 @@ Body B1 has **no** aft step. Report configurations B2/B3 reduce the last
 7.0/4.0 in to 3.60 in diameter so stowed fins sit flush at 4.00 — we model B1,
 so that step is deliberately absent.
 
+Fin edges (Fig. 2 fin section, Table 4; confirmed by the user 2026-10-22):
+both LE and TE are symmetric 45° wedges (δ* = 45° for F1 at both edges),
+the **wedge apex is rounded with r = 0.008 in (0.16 mm here)**, and the
+bevel shoulders are sharp. Both geometry paths (scad and `scripts/gmesh`)
+still model a sharp apex. The TE sits flush with the base plane, C_R is
+measured apex to apex, and the fin root is fused to the body (no gap).
+
+Test conditions (report test-conditions table):
+- LaRC 4-ft UPWT: Ma 1.6, 1.9, 2.36, 2.86; Re 3.0e6/ft (Re_D 1.0 M); Tt 150 °F.
+  Transition strips of No. 40 sand 1.2 in aft of the nose apex and 0.40 in
+  aft of the fin LE; schlieren confirmed a turbulent boundary layer.
+- MDAC 4-ft transonic: Ma 0.5–3.0 (1.6: Pt 22.7 psia, Tt 67.75 °F,
+  q 9.41 psi); Re 7.0e6/ft (Re_D 2.33 M). No trip mentioned.
+- AEDC 4T: Ma 0.5–1.30 only; Re 3.6–5.2e6/ft. No trip mentioned.
+- Ours: Re_D ≈ 0.84 M (p∞ 28.5 kPa, T∞ 288 K), fully turbulent SST.
+  The targets are MDAC, so Re_D 2.33 M is the matching value; in September
+  a 3.6× Re change moved the roll < 2 %.
+- Unconfirmed: the C/D-prefixed series (B1 DT9B01, B1F1 CT9S08) have points
+  both below Ma 1.3 and above 1.6, so they may be AEDC + LaRC combined.
+
 ### Geometry gotchas
 
 - **`caseProperties` wins over the scad defaults.** `rebuild-mesh.sh` reads
