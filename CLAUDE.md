@@ -85,12 +85,14 @@ Standing (Ma 1.6): `finwake` Mx +0.0086 (92 %, pass); the Gmsh family
 (`gm_arc_M1.6`, s06, s08, s09) +0.0020 to +0.0022 C_ℓ, i.e. Mx −0.002 (wrong
 sign, fail). Digitized B1/B1F1 data: `literature/*.csv`.
 
-Axial force targets from the same report (circle series, Ma 1.6, α = 0):
-`C_Af ≈ 0.40` (forebody, `C_A − C_Ab`) and `C_Ab ≈ 0.10` (base, over the full
-base area πd²/4). `post_process.py` gives only the total `Cx`. Splitting off
-the base disk (fuselage faces at x = 0.8 m with the normal along x) needs a
-wall-field sample. The best case so far gives C_Af 0.454 and C_Ab 0.202, so the
-base is the main axial-force discrepancy.
+Axial force targets (Ma 1.6, α = 0, since 2026-10-22): **MDAC DX5B04**
+B1F1, `C_Af 0.490` (forebody, `C_A − C_Ab`), `C_Ab 0.150` (base, over the
+full base area πd²/4), `C_A 0.640`. The LaRC series (CT9S08: 0.400 / 0.097)
+is a lower reference only. Its Ma 1.6 base dip also appears in the bare-body
+B1 data, which our bare body matches at Ma 1.3 but misses by ~60 % in C_A at
+Ma 1.6 and 1.9 (EXPERIMENTS s10). Our finned C_A is 0.61–0.66 (on MDAC);
+the split differs (base ~0.18–0.20 vs 0.150). `post_process.py` gives only
+the total `Cx`; `wall_breakdown.py` gives the split.
 
 The roll is a small residual of two large opposing chordwise contributions
 (front chord ≈ +0.040, mid chord ≈ −0.046). Small errors in either one swing
