@@ -462,6 +462,46 @@ the TE geometry in the report (bevel sides, shoulder radius, BL trip).
 Results: `results/arc_M1.6_finwake/first_cell.txt`,
 `results/gm_arc_M1.6_s09_sting/first_cell.txt`.
 
+### s12: rounded fin LE, r = 0.16 mm (Gmsh)
+Case `gm_arc_M1.6_s12_leround`: `gm_arc_M1.6` with `finLERadius 0.16` and
+`hLERound 0.07` in `gmshParams`. Fig. 2 and Table 4 give the LE and TE
+apexes a radius r = 0.008 in (0.16 mm here); the bevel shoulders are sharp
+(both confirmed by the user). The apex stays at x = 660 (C_R apex to apex),
+so the inscribed round moves the wedge and its shoulder 0.26 mm forward.
+
+The TE stays sharp, as a documented deviation. With a rounded TE ending on
+the base plane, the round, the base face and the rim meet tangentially at
+every fin root, which hexahedra cannot fill. Shifting the fin 0.16 mm aft
+avoids that, but the round then crosses the rim's shear-layer surface
+r = R behind the base and breaks the wake-core blocks under each fin. The
+TE needs its own re-layout of the base region; deferred until we know
+whether the radius matters at all.
+
+Geometry (`scripts/gmesh`): each LE half (the round's arc and the bevel)
+is one exact quadratic NURBS edge, and the fin is its section revolved
+about the arc axis. The scad's ruled wedges pair the arcs' root angles;
+the revolved wedges are cones, which differ from them by < 8 um on the
+exposed fin. Exposed fin volume +199 mm^3 (4 x 49.4 mm^3 in the LE slab:
+the barrel is 0.26 mm longer), wall area +20 mm^2. All geometry checks
+pass. The wall-area check tolerance is 5e-5 for this geometry: OCC's area
+of trimmed NURBS pieces is off by up to 0.5 mm^2 (checked against direct
+integration).
+
+Mesh: 4 cells on each half of the round (first cell 0.07 mm at the apex).
+The LE's chordwise count is tied, through the LE C-grid, to the radial
+count at the hood front and from there to the sleeve's circumferential
+count. So the finer LE also refines the body and nose rings: 12.07 M
+cells (baseline 10.86; fins 5.69, body 3.59, nose 1.26). That is the only
+side effect. Coarsened test mesh: near the LE the minimum scaled Jacobian
+and the number of cells below 0.1 are the same as the baseline's (0.0071,
+107).
+
+Hypothesis: the round changes the LE bevel roll by a few percent (the LE
+bow shock is detached either way), and the TE separation, which decides
+the sign, is unaffected. Baseline `gm_arc_M1.6`: Mx −0.00204, LE +0.01319,
+flat −0.01717, TE +0.00194.
+Result: *pending*
+
 ### Target change (2026-10-21): compare the fin-only roll
 The report's own data (user-digitized B1F1 in `literature/`) show:
 - At α = 0 the 4-fin model should not depend on φ, but MDAC's total reads
