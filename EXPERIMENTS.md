@@ -8,8 +8,8 @@ plus `results/<case>/wall_breakdown.csv` for the base/forebody split.
 | Metric | Target | Acceptance |
 |---|---|---|
 | `Mx` (= −C_ℓ), fin-only roll (MDAC CX5C04) | +0.0094 | +0.006 … +0.013 (φ scatter) |
-| C_Af (forebody) | 0.40 | report only |
-| C_Ab (base, full base area) | 0.10 | report only |
+| C_Af (forebody), MDAC DX5B04 | 0.490 | report only (LaRC CT9S08: 0.400) |
+| C_Ab (base, full base area), MDAC DX5B04 | 0.150 | report only (LaRC CT9S08: 0.097) |
 
 ## Policy
 
@@ -386,7 +386,43 @@ report's Ma 1.6 dip, run in sequence (`create_case.py --template
 openfoam/gm_b1_M1.6 --Mach M`; same mesh, same freestream p and T, so
 Re ∝ U). Report B1 C_Ab / C_Af: Ma 1.3 0.220 / 0.239, Ma 1.9 0.140 / 0.096.
 If ours land near those values, the 1.6 point is the tunnel's outlier.
-Result: *pending*
+
+**Result, Ma 1.3 and 1.9 (2026-10-22):** same 6.2 M mesh, 20.5 s/it. Ma 1.3
+was flat from it. ~2400 (Fx +0.02 % to it. 3500) and was stopped and
+post-processed at it. 3500. Ma 1.9 was stopped at it. 1100, with Fx still
+creeping +0.2 N per 100 iterations (≈ 0.15 % left on C_A). Cy, Cz and the
+moments are ≤ 1e-4, as the axisymmetry requires.
+
+| B1 alone | C_Af ours / report | C_Ab ours / report | C_A ours / report |
+|---|---|---|---|
+| Ma 1.3 (it. 3500) | 0.248 / 0.239 | 0.222 / 0.220 | 0.470 / 0.459 (+2 %) |
+| Ma 1.6 (it. 1800) | 0.228 / 0.167 | 0.181 / 0.086 | 0.409 / 0.253 (+62 %) |
+| Ma 1.9 (it. 1100) | 0.213 / 0.096 | 0.163 / 0.140 | 0.376 / 0.236 (+59 %) |
+
+Report C_A = C_Af + C_Ab (both on S_ref 12.566 in²; C_A itself is not
+plotted). Our split: nose pressure 0.181 / 0.167 / 0.157 and friction
+0.067 / 0.061 / 0.056 at Ma 1.3 / 1.6 / 1.9.
+
+- Ma 1.3 matches on both base and forebody. The same mesh and numerics miss
+  Ma 1.6 and 1.9 by about 60 % in C_A.
+- The report's C_A drops 45 % from Ma 1.3 to 1.6, ours 13 %. Its C_Af at
+  Ma 1.6 equals our nose pressure drag alone, leaving nothing for friction,
+  and at Ma 1.9 (0.096) it is below our nose pressure drag (0.157). No split
+  of our C_A fits the tunnel at Ma 1.6–1.9.
+- The B1F1 data split the same way by facility. At Ma 1.6, LaRC CT9S08 gives
+  C_Af 0.400, C_Ab 0.097, C_A 0.497, and MDAC DX5B04 gives 0.490, 0.150,
+  0.640. The base dip at Ma 1.6 is only in the C/D-prefixed series (B1
+  DT9B01, B1F1 CT9S08/S09); MDAC has none. Our finned C_A is 0.656
+  (`finwake`), 0.630 (`gm_arc_M1.6`) and 0.610 (s09), i.e. on MDAC.
+- The fin increment in C_Af agrees: LaRC 0.400 − 0.167 = 0.233, ours
+  0.454 − 0.228 = 0.226.
+
+**Conclusion: the base flow is not a numerics problem, and nothing changes in
+the base modelling.** The LaRC/AEDC axial data at Ma 1.6–1.9 are
+inconsistent with the same series at Ma 1.3 and with MDAC. How C_Af and C_Ab
+were reduced is in the original data reports (refs 1–6, p.17), which we
+don't have. The axial targets move to MDAC DX5B04 (table above), with
+LaRC as a lower reference. Results: `results/gm_b1_M1.{3,6,9}/`.
 
 ### Target change (2026-10-21): compare the fin-only roll
 The report's own data (user-digitized B1F1 in `literature/`) show:
