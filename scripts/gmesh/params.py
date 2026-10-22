@@ -28,6 +28,10 @@ DEFAULTS: dict[str, float] = {
     "hRelax": 2.0, "hWake": 4.0, "hWakeRadial": 1.0, "hSeam": 4.0, "hFarMid": 8.0, "hFar": 30.0,
     "hFinChord": 2.0, "hFinSpan": 1.5, "hSlabOuter": 3.0, "hLE": 0.2,
     "hTEShoulder": 0.0,        # chordwise cell at the TE bevel's shoulder (x = z2); 0: no grading
+    # fin LE apex radius (report r = 0.008 in = 0.16 mm here); 0: sharp. The
+    # apex stays at x = z0 and the wedge moves forward. hLERound: chordwise
+    # cell at the rounded apex (hLE stays at the TE)
+    "finLERadius": 0.0, "hLERound": 0.04,
 }
 INTEGER = ("nTheta", "nLayers")
 _ENTRY = re.compile(r"^\s*([A-Za-z]\w*)\s+([-+0-9.eE]+)\s*;", re.MULTILINE)

@@ -4,14 +4,13 @@ case."""
 
 from __future__ import annotations
 
-import math
 import shutil
 import subprocess
 from pathlib import Path
 
 import gmsh
 
-from .occ import real_edges
+from .occ import collapsed_corner, real_edges
 
 
 def hex_corners(v: int) -> list[int]:
@@ -49,7 +48,7 @@ writeControl timeStep; writeInterval 1; writeFormat ascii; writePrecision 8; tim
 """
 
 
-def prism_corners(v: int) -> list[int]:
+def prism_corners(v: int, spec=None) -> list[int]:
     """For a prism block: its 6 corners (one triangle, then the other, each
     corner above its partner), with both triangles' transfinite corners set
     to match, so their collapsed corners lie on the same lateral edge. [] for
@@ -61,18 +60,9 @@ def prism_corners(v: int) -> list[int]:
     pts = [[abs(p) for _, p in gmsh.model.getBoundary([f], combined=True, oriented=False, recursive=True)]
            for f in tris]
     # Gmsh collapses a transfinite triangle at its first corner, fanning one
-    # row of prisms around it: use the widest corner. A fan at the sharp
-    # (22.5-degree) trailing-edge corner gives sliver prisms whose centres
-    # fall outside their faces.
+    # row of prisms around it: see occ.collapsed_corner.
     xyz = {p: gmsh.model.getValue(0, p, []) for p in pts[0]}
-
-    def angle(p):
-        a, b = [q for q in pts[0] if q != p]
-        u = [xyz[a][i] - xyz[p][i] for i in range(3)]
-        w = [xyz[b][i] - xyz[p][i] for i in range(3)]
-        return math.acos(sum(u[i] * w[i] for i in range(3)) / math.dist(xyz[a], xyz[p]) / math.dist(xyz[b], xyz[p]))
-
-    first = max(pts[0], key=angle)
+    first = collapsed_corner(tris[0], pts[0], spec)
     i = pts[0].index(first)
     bottom, top_set = pts[0][i:] + pts[0][:i], set(pts[1])
     # right-handed: the bottom triangle's normal points to the top one
@@ -110,7 +100,7 @@ def set_transfinite_blocks(info: dict):
         gmsh.model.mesh.setTransfiniteSurface(f, cornerTags=corners)
         gmsh.model.mesh.setRecombine(2, f)
     for v in info["zones"]:
-        corners = prism_corners(v) or hex_corners(v)
+        corners = prism_corners(v, info["layout"].spec) or hex_corners(v)
         gmsh.model.mesh.setTransfiniteVolume(v, cornerTags=corners)
         gmsh.model.mesh.setRecombine(3, v)
 

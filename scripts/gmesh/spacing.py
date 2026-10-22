@@ -24,7 +24,7 @@ import math
 
 import gmsh
 
-from .occ import PAD, real_edges
+from .occ import PAD, collapsed_corner, real_edges
 
 WALLS = ("fuselage", "stabilizers", "sting")
 
@@ -238,15 +238,10 @@ class Families:
         return out
 
 
-def corner_angle(p, a, b) -> float:
-    u, w = [a[j] - p[j] for j in range(3)], [b[j] - p[j] for j in range(3)]
-    return math.acos(max(-1.0, min(1.0, sum(u[j] * w[j] for j in range(3)) / math.dist(a, p) / math.dist(b, p))))
-
-
 def edge_families(topo: Topo) -> Families:
     """Opposite edges of every quad face; the two edges at a triangle's
-    collapsed corner (the widest, as export.prism_corners collapses it; the
-    apex for faces with OCC's pole edge)."""
+    collapsed corner (occ.collapsed_corner, as export.prism_corners collapses
+    it; the apex for faces with OCC's pole edge)."""
     fam = Families()
     for c in topo.curves:
         fam.find(c)
@@ -259,8 +254,7 @@ def edge_families(topo: Topo) -> Families:
             if len(gmsh.model.getBoundary([(2, f)], oriented=False)) != len(loop):     # pole edge
                 k = corners.index(min(corners, key=lambda p: math.hypot(*topo.xyz[p][1:]) + abs(topo.xyz[p][0])))
             else:
-                pts = [topo.xyz[p] for p in corners]
-                k = max(range(3), key=lambda i: corner_angle(pts[i], pts[i - 1], pts[(i + 1) % 3]))
+                k = corners.index(collapsed_corner((2, f), corners, topo.info["layout"].spec))
             fam.union(edges[k], edges[k - 1], -signs[k] * signs[k - 1])
     return fam
 
@@ -469,7 +463,8 @@ class Rules:
                 elif (self.spec and topo.axial(c) > 0.9 and r < self.spec.tip_radius() + 1
                       and any(abs(x - z) < 1e-6 for z in (self.spec.z[0], self.spec.z[3]))
                       and any(topo.group_of.get(f) == "stabilizers" for f in topo.at_vertex.get(p, []))):
-                    cond = End(P["hLE"], q)                              # chordwise at the LE/TE apex
+                    rounded = self.spec.r_le > 0 and abs(x - self.spec.z[0]) < 1e-6
+                    cond = End(P["hLERound"] if rounded else P["hLE"], q)   # chordwise at the LE/TE apex
                 elif (self.spec and P["hTEShoulder"] > 0 and topo.axial(c) > 0.9
                       and r < self.spec.tip_radius() + 1 and abs(x - self.spec.z[2]) < 1e-6
                       and any(topo.group_of.get(f) == "stabilizers" for f in topo.at_vertex.get(p, []))):

@@ -127,11 +127,22 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
     v_body = occ.getMass(*body_v)
     fin_info = {}
     if fins:
-        whole, _ = occ.fuse(occ.copy([body_v]), occ.copy(fins))
+        # the fins outside the body, split into their exposed faces and their
+        # footprint on the body (a fuse with the body is wrong for the
+        # rounded LE's NURBS faces: 700 instead of 200 mm^3 more fin)
+        exposed, _ = occ.cut(occ.copy(fins), occ.copy([body_v]))
         occ.synchronize()
-        fin_info = {"exposed_volume": occ.getMass(*whole[0]) - v_body,
-                    "wall_area": sum(occ.getMass(*f) for f in gmsh.model.getBoundary(whole, oriented=False))}
-        occ.remove(whole, recursive=True)
+        a_fin = a_foot = 0.0
+        for f in gmsh.model.getBoundary(exposed, oriented=False):
+            (u0, v0), (u1, v1) = gmsh.model.getParametrizationBounds(*f)
+            x, y, z = gmsh.model.getValue(2, f[1], [0.5 * (u0 + u1), 0.5 * (v0 + v1)])
+            on_body = abs(math.hypot(y, z) - R) < 1e-6 and x < total
+            a_foot += occ.getMass(*f) if on_body else 0.0
+            a_fin += 0.0 if on_body else occ.getMass(*f)
+        a_body = sum(occ.getMass(*f) for f in gmsh.model.getBoundary([body_v], oriented=False))
+        fin_info = {"exposed_volume": sum(occ.getMass(*e) for e in exposed),
+                    "wall_area": a_body - a_foot + a_fin}
+        occ.remove(exposed, recursive=True)
     solids = [body_v] + fins
     if L.r_sting:
         solids.append(O.x_cylinder(total, L.x_se - total, L.r_sting, L.sting_rays))
@@ -371,8 +382,11 @@ def fin_region_tools(L: Layout, P: dict, core_w: Core) -> list:
                  ("arc", (z1, *s.yz(Ro, s.a_body(Ro))), (z1, *s.yz(Ro, fl.tip)), (z1, *c)))
     tip_strip = O.loop_face([s.point(ri, fl.tip, xs), s.point(ro, fl.tip, xs), s.point(ro, fl.tip, xe),
                              s.point(ri, fl.tip, xe)])
-    hexagon = O.loop_face([s.point(r, fl.tip, x) for r, x in ((Re, z0), (Ro, z1), (Ro, z2), (Re, z3), (Ri, z2),
-                                                               (Ri, z1))])
+    if s.r_le > 0:
+        hexagon = O.fin_section_face(s, fl.tip)
+    else:
+        hexagon = O.loop_face([s.point(r, fl.tip, x) for r, x in ((Re, z0), (Ro, z1), (Ro, z2), (Re, z3), (Ri, z2),
+                                                                   (Ri, z1))])
     t += gmsh.model.occ.cut([tip_strip], [hexagon])[0]                         # tip plane, off the tip wall
     # The column above the tip plane carries the plane's layout straight out
     # to P: every (x, rho) line on it, the tip wall split into a kite at each
@@ -384,7 +398,19 @@ def fin_region_tools(L: Layout, P: dict, core_w: Core) -> list:
             ((z0, Re), (z1, Ri)), ((z0, Re), (z1, Ro)), ((z2, Ro), (z3, Re)), ((z2, Ri), (z3, Re)),   # wedges
             ((z1, Ri), (z2, Ri)), ((z1, Ro), (z2, Ro)),                         # barrels
             ((z1, Ro), M), ((z1, Ri), M), (M, N), (N, (z2, Ro)), (N, (z2, Ri))]  # kites, strips
+    if s.r_le > 0:
+        # a rounded apex is a smooth point of the tip wall's edge: the LE kite
+        # would have a 180-degree corner there, so it is split along the bisector
+        segs.append(((z0, Re), M))
     for (xa, ra), (xb_, rb) in segs:
+        if s.r_le > 0 and xa == z0 and ra == Re and rb != Re:
+            # the rounded LE's edge on the tip plane and its image on P: the
+            # same NURBS, its control points carried out like every point
+            pts, wts = s.le_profile(1 if rb > Re else -1)
+            on_tip = [(x, *s.yz(r, fl.tip)) for x, r in pts]
+            on_p = [(x, *img(r)) for x, r in pts]
+            t += O.ruled(("nurbs", on_tip[0], on_tip[-1], on_tip, wts), ("nurbs", on_p[0], on_p[-1], on_p, wts))
+            continue
         if ra == rb:
             t.append(O.x_strip(s.yz(ra, fl.tip), img(ra), xa, xb_))
         else:

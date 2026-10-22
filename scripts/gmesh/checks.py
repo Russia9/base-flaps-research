@@ -33,7 +33,11 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
     # the sting covers the base's centre: fuselage and fins only, the base an annulus
     a_sting = math.pi * L.r_sting**2
     v_sting = a_sting * (L.x_se - body.total) if L.r_sting else 0.0
-    row("wall area (mm^2)", a_wall, (fins["wall_area"] if fins else a_lat + math.pi * body.R**2) - a_sting)
+    # OCC's area of a trimmed piece of the rounded LE's NURBS faces is off by
+    # up to 0.5 mm^2 (integrating |S_u x S_v| over the trimmed domain agrees
+    # with the untrimmed faces to 0.07 mm^2 per fin), so 2e-5 of the wall
+    tol_area = 5e-5 if L.spec and L.spec.r_le > 0 else 1e-5
+    row("wall area (mm^2)", a_wall, (fins["wall_area"] if fins else a_lat + math.pi * body.R**2) - a_sting, tol_area)
     v_fluid = sum(occ.getMass(3, v) for v in info["zones"])
     row("fluid volume (mm^3)", v_fluid,
         math.pi * L.rff**2 * (L.xout - L.xin) - v_body - fins.get("exposed_volume", 0.0) - v_sting)

@@ -110,13 +110,21 @@ def disk_hole(poly: list, x: float, r: float, angles: list[float]) -> Dt:
 
 
 def ruled(w0: tuple, w1: tuple) -> list[Dt]:
-    """Ruled surface between two curves, each ("line", A, B) or ("arc", A, B,
-    centre) with 3-D points, ruled A0-A1 and B0-B1. OCC's ThruSections picks
-    the pairing itself and can return the crossed (twisted) surface; this
-    checks the side edges and rebuilds with the second curve reversed."""
+    """Ruled surface between two curves, each ("line", A, B), ("arc", A, B,
+    centre) or ("nurbs", A, B, control points, weights: quadratic, knots 0,
+    1, 2 with multiplicities 3, 2, 3) with 3-D points, ruled A0-A1 and B0-B1.
+    OCC's ThruSections picks the pairing itself and can return the crossed
+    (twisted) surface; this checks the side edges and rebuilds with the
+    second curve reversed."""
 
     def curve(w, rev):
         kind, a, b = w[0], w[1], w[2]
+        if kind == "nurbs":
+            pts, wts = (w[3][::-1], w[4][::-1]) if rev else (w[3], w[4])
+            tags = [point(q) for q in pts]
+            c = occ().addBSpline(tags, degree=2, weights=wts, knots=[0, 1, 2], multiplicities=[3, 2, 3])
+            occ().remove([(0, t) for t in tags[1:-1]])
+            return c
         if rev:
             a, b = b, a
         pa, pb = point(a), point(b)
@@ -182,7 +190,9 @@ def body_solid(body: Body, angles: list[float]) -> Dt:
 def fin_solids(spec: FinSpec) -> list[Dt]:
     """The N fin solids, sewn from the scad's faces: ruled LE/TE wedges between
     the edge arc and the inner/outer arcs, cylindrical barrels, and planar
-    root and tip caps."""
+    root and tip caps. With a rounded LE, the section revolved instead."""
+    if spec.r_le > 0:
+        return rounded_fin_solids(spec)
     z0, z1, z2, z3 = spec.z
     Ri, Re, Ro = spec.R_in, spec.R_edge, spec.R_out
 
@@ -204,6 +214,47 @@ def fin_solids(spec: FinSpec) -> list[Dt]:
     out = rotated_copies([fin], spec.N)
     occ().synchronize()
     return out
+
+
+def rounded_fin_solids(spec: FinSpec) -> list[Dt]:
+    """The N fins with the rounded LE: the fin's section at angle a0 (inside
+    the body) revolved about the arc axis to the tip. Each LE half (round and
+    bevel) is one NURBS edge, so one face. Unlike the scad's ruled wedges,
+    whose rulings pair the arcs' root angles, the wedges are cones; the
+    exposed surfaces differ by less than 8 um."""
+    a0 = min(spec.th.values())
+    if max(math.hypot(*spec.yz(r, a0)) for r in (spec.R_in, spec.R_edge, spec.R_out)) > spec.R - 0.5:
+        raise ValueError("the fin's root section is not inside the body")
+    yc, zc = spec.centre()
+    section = fin_section_face(spec, a0)
+    fin = next(dt for dt in occ().revolve([section], 0, yc, zc, 1, 0, 0, -(spec.th_tip - a0)) if dt[0] == 3)
+    out = rotated_copies([fin], spec.N)
+    occ().synchronize()
+    return out
+
+
+def fin_section_face(spec: FinSpec, a: float) -> Dt:
+    """Fin 0's section at fin-frame angle a as a planar face: the rounded LE
+    halves (one NURBS edge each), the barrels and the sharp TE wedge."""
+    z0, z1, z2, z3 = spec.z
+    Ri, Re, Ro = spec.R_in, spec.R_edge, spec.R_out
+
+    def p(x, rho):
+        return point(spec.point(rho, a, x))
+
+    e0, so1, so2, e3, si2, si1 = (p(x, r) for x, r in ((z0, Re), (z1, Ro), (z2, Ro), (z3, Re), (z2, Ri), (z1, Ri)))
+
+    def le_half(side, shoulder):
+        pts, w = spec.le_profile(side)
+        ctrl = [p(x, rho) for x, rho in pts[1:-1]]
+        c = occ().addBSpline([e0] + ctrl + [shoulder], degree=2, weights=w, knots=[0, 1, 2],
+                             multiplicities=[3, 2, 3])                     # its ends are the edge's vertices
+        occ().remove([(0, t) for t in ctrl])
+        return c
+
+    upper, lower = le_half(1, so1), le_half(-1, si1)
+    lines = [occ().addLine(so1, so2), occ().addLine(so2, e3), occ().addLine(e3, si2), occ().addLine(si2, si1)]
+    return (2, occ().addPlaneSurface([occ().addCurveLoop([upper] + lines + [lower])]))
 
 
 def fragment(zones: dict[int, str], tools: list[Dt]) -> dict[int, str]:
@@ -232,6 +283,38 @@ def fragment(zones: dict[int, str], tools: list[Dt]) -> dict[int, str]:
 def real_edges(face: Dt) -> list[Dt]:
     """Edges of a face, without OCC's zero-length pole edges (the apex)."""
     return [e for e in gmsh.model.getBoundary([face], oriented=False) if occ().getMass(1, e[1]) > 1e-9]
+
+
+def corner_angle(face: Dt, p: int) -> float:
+    """Angle (rad) at corner p of a face between its two edges' tangents: a
+    curved edge's chord misjudges it (the rounded LE's apex is 90 degrees
+    between its tangents, 24 between the chords)."""
+    p0 = gmsh.model.getValue(0, p, [])
+    dirs = []
+    for _, c in real_edges(face):
+        if p not in [abs(q) for _, q in gmsh.model.getBoundary([(1, c)], oriented=False)]:
+            continue
+        (t0,), (t1,) = gmsh.model.getParametrizationBounds(1, c)
+        t = t0 + (t1 - t0) * (1e-4 if math.dist(gmsh.model.getValue(1, c, [t0]), p0) < 1e-6 else 1 - 1e-4)
+        q = gmsh.model.getValue(1, c, [t])
+        d = [q[i] - p0[i] for i in range(3)]
+        n = math.sqrt(sum(x * x for x in d))
+        dirs.append([x / n for x in d])
+    return math.acos(max(-1.0, min(1.0, sum(dirs[0][i] * dirs[1][i] for i in range(3)))))
+
+
+def collapsed_corner(face: Dt, corners: list[int], spec: FinSpec | None) -> int:
+    """The corner where a prism's triangle collapses: a rounded LE apex if it
+    has one (its two edges both run chordwise, while collapsing at the
+    shoulder would tie the apex's fine chordwise count to the circumferential
+    family round P), else the widest (a fan at the sharp 22.5-degree TE
+    corner gives slivers)."""
+    if spec and spec.r_le > 0:
+        # on the tip plane or its image on P: the column keeps x
+        for p in corners:
+            if abs(gmsh.model.getValue(0, p, [])[0] - spec.z[0]) < 1e-6:
+                return p
+    return max(corners, key=lambda p: corner_angle(face, p))
 
 
 def loft_solid(sections: list[list]) -> Dt:

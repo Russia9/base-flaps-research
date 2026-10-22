@@ -52,7 +52,7 @@ def main(argv: list[str]) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     body = Body(D)
-    spec = FinSpec(body, N, parse_scalar(props, "xi"), parse_scalar(props, "L")) if N else None
+    spec = FinSpec(body, N, parse_scalar(props, "xi"), parse_scalar(props, "L"), P["finLERadius"]) if N else None
 
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)

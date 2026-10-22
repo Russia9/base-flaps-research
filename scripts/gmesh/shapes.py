@@ -73,7 +73,7 @@ class FinSpec:
     R_in, R_edge, R_out = 36.0, 38.0, 40.0
     root_embed, wedge = 2.0, 45.0           # wedge: LE/TE included angle (deg)
 
-    def __init__(self, body: Body, N: int, xi_deg: float, L: float):
+    def __init__(self, body: Body, N: int, xi_deg: float, L: float, r_le: float = 0.0):
         if abs(self.R_out - body.R) > 1e-9:
             raise ValueError("R_out must equal the body radius (scad assert)")
         self.body, self.N, self.L = body, N, L
@@ -82,8 +82,15 @@ class FinSpec:
         self.root_y = body.R - self.root_embed
         self.Yc = self.root_y + self.R_edge * math.sin(self.xi / 2)
         self.Zc = -self.R_edge * math.cos(self.xi / 2)
-        self.chamfer = (self.R_out - self.R_in) / 2 / math.tan(math.radians(self.wedge) / 2)
-        self.z = [body.total - L, body.total - L + self.chamfer, body.total - self.chamfer, body.total]
+        half = math.radians(self.wedge) / 2
+        self.chamfer = (self.R_out - self.R_in) / 2 / math.tan(half)
+        # LE apex rounded with radius r_le (report: r = 0.008 in), inscribed in
+        # the wedge. The apex stays at z0 (C_R is apex to apex), so the wedge
+        # and its shoulder move forward by r / sin(half) - r.
+        self.r_le = r_le
+        self.le_shift = r_le / math.sin(half) - r_le
+        self.z = [body.total - L, body.total - L - self.le_shift + self.chamfer, body.total - self.chamfer,
+                  body.total]
         self.th = {r: math.atan2(self.root_y - self.Yc, self.Zc_at(r) - self.Zc)
                    for r in (self.R_in, self.R_edge, self.R_out)}
         self.th_tip = self.th[self.R_edge] + self.xi
@@ -135,3 +142,17 @@ class FinSpec:
 
     def tip_radius(self) -> float:
         return math.hypot(*self.yz(self.R_edge, self.th_tip))
+
+    def le_profile(self, side: int) -> tuple[list[tuple[float, float]], list[float]]:
+        """The rounded LE from the apex (z0, R_edge) to the shoulder on side
+        +1 (R_out) or -1 (R_in), in (x, rho): control points and weights of a
+        quadratic NURBS (knots 0, 1, 2 with multiplicities 3, 2, 3), the
+        round's arc (rational, exact) then the straight bevel."""
+        half = math.radians(self.wedge) / 2
+        r, Re, z0 = self.r_le, self.R_edge, self.z[0]
+        sweep = math.pi / 2 - half                           # the arc: apex normal to bevel normal
+        tangent = (z0 + r - r * math.sin(half), Re + side * r * math.cos(half))
+        corner = (z0, Re + side * r * math.tan(sweep / 2))   # where the arc's end tangents meet
+        shoulder = (self.z[1], Re + side * (self.R_out - Re))
+        mid = (0.5 * (tangent[0] + shoulder[0]), 0.5 * (tangent[1] + shoulder[1]))
+        return [(z0, Re), corner, tangent, mid, shoulder], [1.0, math.cos(sweep / 2), 1.0, 1.0, 1.0]

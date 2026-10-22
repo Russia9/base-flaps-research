@@ -141,8 +141,9 @@ so that step is deliberately absent.
 Fin edges (Fig. 2 fin section, Table 4; confirmed by the user 2026-10-22):
 both LE and TE are symmetric 45° wedges (δ* = 45° for F1 at both edges),
 the **wedge apex is rounded with r = 0.008 in (0.16 mm here)**, and the
-bevel shoulders are sharp. Both geometry paths (scad and `scripts/gmesh`)
-still model a sharp apex. The TE sits flush with the base plane, C_R is
+bevel shoulders are sharp. The scad models a sharp apex. `scripts/gmesh`
+can round the LE (`finLERadius` in `gmshParams`, 0 = sharp; the apex stays
+at z0 and the wedge moves forward); the TE stays sharp (EXPERIMENTS s12). The TE sits flush with the base plane, C_R is
 measured apex to apex, and the fin root is fused to the body (no gap).
 
 Test conditions (report test-conditions table):
