@@ -112,6 +112,12 @@ class FinLayout:
         self.outer_lines = [(self.V, pv), (self.It, self.C), (self.Ot, self.E), (self.W, self.D), (self.G, self.C1)]
         self.outer_up_lines = [(self.V, pv), (lerp(self.V, self.W, 1 / 3), self.C), (lerp(self.V, self.W, 2 / 3), self.E),
                                (self.W, self.D), (self.G, self.C1)]
+        # Wake and far end caps (layout.sector_tools): the ring inside Gamma
+        # and the lines to P are one conformal zone there, so the lines must
+        # leave Gamma where the rays end (V, W, G, and the bisector ray's own
+        # point on V-W, 0.2 mm from M). Two leave W; the block W-E-D is a prism.
+        m_end = at(ray_polygon(phi_m, self.gamma), phi_m)
+        self.sector_lines = [(self.V, pv), (m_end, self.C), (self.W, self.E), (self.W, self.D), (self.G, self.C1)]
 
     def ray_end(self, phi: float) -> float:
         """Distance along a ray to Gamma."""

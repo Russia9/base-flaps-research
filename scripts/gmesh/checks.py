@@ -44,6 +44,14 @@ def check(body: Body, P: dict, info: dict) -> list[str]:
     for name, _, x0, x1, kind in info["zone_list"]:
         got = sum(occ.getMass(3, v) for v, n in info["zones"].items() if n == name)
         row(f"zone {name} volume (mm^3)", got, zone_volume(L, name, kind, x0, x1, fins))
+    # Wedges: the N periodic wedges of every zone hold the same volume (a
+    # block classified into the wrong wedge shows up here).
+    if info["wedges"]:
+        N = info["fins_n"]
+        for name, *_ in info["zone_list"]:
+            per = [sum(occ.getMass(3, v) for v, n in info["zones"].items() if n == name and info["wedges"][v] == k)
+                   for k in range(N)]
+            row(f"zone {name} wedge volumes (mm^3)", max(per), sum(per) / N, 1e-6)
 
     # Block topology: every block a hexahedron (6 faces of 4 edges, 12
     # edges, 8 corners) or a prism (2 triangles, 3 quads).

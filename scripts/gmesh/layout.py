@@ -31,7 +31,7 @@ import gmsh
 from . import occ as O
 from .finlayout import FinLayout
 from .polar import Core, at, polygon_area, ray_polygon
-from .shapes import Body, FinSpec, bisect
+from .shapes import Body, FinSpec, bisect, rotate
 
 SQ2 = math.sqrt(2.0)
 RANK = {"far": 0, "outer": 1, "wake": 1, "inner": 2, "sting": 3}   # seam master: the lower rank (coarser side)
@@ -67,6 +67,8 @@ class Layout:
             self.p_core_rays = starting_at(self.p_rays, 2)      # corners on E
             self.body_angles = [r for i, r in enumerate(self.rays) if i % 4 == 3]   # body patches meet on the gap rays
             self.xe = fl.xe
+            # wedge k's + boundary between Gamma and P: the strip G_k -> C1_k
+            self.strips = [(rotate(fl.G, spec.turn(k)), rotate(fl.C1, spec.turn(k))) for k in range(spec.N)]
             if not body.total < self.xe < self.x1:
                 raise ValueError("xSlabEnd must lie between the base and xZoneEnd")
         else:
@@ -100,6 +102,28 @@ class Layout:
         self.x_45 = bisect(lambda x: body.r(x) - SQ2 * self.h(x), self.x_a, self.x_a + a / k)
         self.x_end = self.x_45 + 0.5 * (self.x_a + a / k - self.x_45)
         self.beta = math.degrees(beta)
+
+    def wedge_of(self, y: float, z: float) -> int:
+        """The 360/N-degree wedge (fin k's, 0..N-1) holding a cross-section
+        point. Its boundaries are block faces in every zone: the gap-ray
+        planes inside Gamma, the strips G -> C1 between Gamma and P, and the
+        planes at 45 deg + k 90 deg outside P."""
+        fl, N = self.fins, self.spec.N
+        step = 2 * math.pi / N
+        phi = math.atan2(z, y)
+        if inside((y, z), self.gamma):
+            return math.floor((phi - fl.fin_rays[3]) / step + 1) % N
+        if not inside((y, z), self.poly_p):
+            return math.floor((phi + step / 2) / step) % N
+
+        def side(k):
+            g, c = self.strips[k % N]
+            return (c[0] - g[0]) * (z - g[1]) - (c[1] - g[1]) * (y - g[0])
+
+        ks = [k for k in range(N) if side(k) < 0 < side(k - 1)]
+        if len(ks) != 1:
+            raise ValueError(f"point ({y:.2f}, {z:.2f}) is in {len(ks)} wedges")
+        return ks[0]
 
     def region(self, x: float, y: float, z: float) -> str:
         """The group whose region contains (x, y, z) (body and fins included)."""
@@ -253,20 +277,28 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
                      for phi in rays_k]
             tools.append(O.x_cylinder(L.xe, L.x1 - L.xe, R, rays_k))
         else:
-            core_k = Core(L.p_core_rays, P["coreWake"])
-            tools = [O.meridional(phi, [(L.xe, core_k.hit(phi)), (L.x1, core_k.hit(phi)), (L.x1, P["rZone"]),
-                                        (L.xe, P["rZone"])]) for phi in L.p_rays]
-            tools += wake_core_tools(core_k, L.xe, L.x1, R, L.p_rays)
+            tools = sector_tools(L, P, L.xe, L.x1, rim=True)
         zones = others("wake") | O.fragment(of_group("wake"), tools)
         if L.r_sting:
             zones = others("sting") | O.fragment(of_group("sting"), sleeve_tools(L))
-    core_f = Core(L.p_core_rays, P["coreFar"])
-    tools = [O.meridional(phi, [(L.xin, core_f.hit(phi)), (L.xout, core_f.hit(phi)), (L.xout, L.rff),
-                                (L.xin, L.rff)]) for phi in L.p_rays]
-    for xa, xb in ((L.xin, L.x0), (L.x1, L.xout)):
-        tools.append(O.x_prism(core_f.corners(), xa, xb))
-        tools += [O.x_strip(p, q, xa, xb) for p, q in core_f.grid_lines()]
-        tools.append(O.x_prism(L.poly_p, xa, xb))
+    if spec:
+        # the ring outside P at the P rays; the end caps inside P share the
+        # wedge boundary with the sleeve and the outer zone (sector_tools)
+        tools = []
+        for phi in L.p_rays:
+            r_p = ray_polygon(phi, L.poly_p)
+            tools.append(O.meridional(phi, [(L.xin, r_p), (L.xout, r_p), (L.xout, L.rff), (L.xin, L.rff)]))
+        for xa, xb in ((L.xin, L.x0), (L.x1, L.xout)):
+            tools.append(O.x_prism(L.poly_p, xa, xb))
+            tools += sector_tools(L, P, xa, xb, rim=False)
+    else:
+        core_f = Core(L.p_core_rays, P["coreFar"])
+        tools = [O.meridional(phi, [(L.xin, core_f.hit(phi)), (L.xout, core_f.hit(phi)), (L.xout, L.rff),
+                                    (L.xin, L.rff)]) for phi in L.p_rays]
+        for xa, xb in ((L.xin, L.x0), (L.x1, L.xout)):
+            tools.append(O.x_prism(core_f.corners(), xa, xb))
+            tools += [O.x_strip(p, q, xa, xb) for p, q in core_f.grid_lines()]
+            tools.append(O.x_prism(L.poly_p, xa, xb))
     # the far ring is cut where the inner groups change, so each of its seam
     # faces has a single partner
     for x in ((L.x0, L.xs, L.xe, L.x1) if spec else (L.x0, L.x1)):
@@ -274,12 +306,21 @@ def build(body: Body, P: dict, spec: FinSpec | None = None) -> dict:
     zones = others("far") | O.fragment(of_group("far"), tools)
 
     groups, shared = name_faces(L, zones, zone_group)
+    # one cell zone per zone and wedge (<zone>_w<k>), so a periodic sector
+    # can be cut out of the converted mesh along block faces
+    wedges = {v: L.wedge_of(*occ.getCenterOfMass(3, v)[1:]) for v in zones} if spec else {}
     for name, *_ in zl:
-        gmsh.model.addPhysicalGroup(3, [v for v, n in zones.items() if n == name], name=name)
+        vols = [v for v, n in zones.items() if n == name]
+        if spec:
+            for k in range(spec.N):
+                gmsh.model.addPhysicalGroup(3, [v for v in vols if wedges[v] == k], name=f"{name}_w{k}")
+        else:
+            gmsh.model.addPhysicalGroup(3, vols, name=name)
     for key, surfs in groups.items():
         gmsh.model.addPhysicalGroup(2, surfs, name=key)
     return {"layout": L, "zones": zones, "zone_list": zl, "zone_group": zone_group, "groups": groups,
-            "shared": shared, "fins": fin_info, "body_volume": v_body, "fins_n": spec.N if spec else 0,
+            "shared": shared, "wedges": wedges,
+            "fins": fin_info, "body_volume": v_body, "fins_n": spec.N if spec else 0,
             "tip": {"beta": L.beta, "x_a": L.x_a, "x_45": L.x_45, "x_end": L.x_end, "h_in": L.h(L.x0)}}
 
 
@@ -295,6 +336,26 @@ def sleeve_tools(L: Layout) -> list:
     tools.append(O.x_prism(core.corners(), x_se, x1))
     tools.append(O.x_cylinder(x_se, x1 - x_se, r, L.sting_rays))
     tools += [O.section_face(L.sq.corners(), x) for x in (L.xe, x_se)]
+    return tools
+
+
+def sector_tools(L: Layout, P: dict, x0: float, x1: float, rim: bool) -> list:
+    """Cross-section of the wake and of the far end caps inside P (finned
+    layout): the sleeve's ring (a square core with corners on the bisector
+    rays, the rays out to Gamma, the base rim's cylinder r = R when rim) and
+    the outer zone's lines from Gamma to P. Every zone then has block faces
+    on the wedge boundary (gap-ray plane inside Gamma, strip G -> C1 outside
+    it), so a periodic sector can be cut along them."""
+    fl, R = L.fins, L.body.R
+    core = Core(L.core_rays, P["coreWake"])
+    tools = [O.x_prism(L.gamma, x0, x1)]
+    tools += [O.meridional(phi, [(x0, core.hit(phi)), (x1, core.hit(phi)), (x1, fl.ray_end(phi)),
+                                 (x0, fl.ray_end(phi))]) for phi in L.rays]
+    tools.append(O.x_prism(core.corners(), x0, x1))
+    tools += [O.x_strip(p, q, x0, x1) for p, q in core.grid_lines()]
+    if rim:
+        tools.append(O.x_cylinder(x0, x1 - x0, R, L.rays))
+    tools += O.rotated_copies([O.x_strip(p, q, x0, x1) for p, q in fl.sector_lines], L.spec.N)
     return tools
 
 
