@@ -11,7 +11,7 @@ boundaryField
     outlet      { type zeroGradient; }
     farfield    { type freestream; freestreamValue uniform $nuTildaInf; }
     "(fuselage|stabilizers)"    { type fixedValue; value uniform 0; }
-    "wedge.*"   { type cyclic; }   // periodic sector sides (caseProperties sectors > 1)
+    "wedge.*"   { type cyclicAMI; }   // periodic sector sides (caseProperties sectors > 1)
 }
 
 

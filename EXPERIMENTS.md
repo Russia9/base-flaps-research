@@ -571,6 +571,12 @@ under swapping the ends. Checked on a coarsened test mesh: every node on
 a wedge boundary has its 90° image within 1e-11 mm. Interior nodes in the
 fin hoods and columns still differ between fins by up to 0.4 mm (same in
 every earlier full-body Gmsh run; not on the cyclic faces).
+Second and third launch: the pair had to be made after the stitch (a
+cyclic is re-ordered after every topology change and the first Γ seam
+broke it), and then a plain `cyclic` still failed: the stitch moved 18
+seam-edge points by 45 µm and split one face on one side only (5 vertices
+against 4), and a cyclic needs identical faces. The pair is therefore a
+`cyclicAMI` (geometric overlap, the identity up to those faces).
 Result: *pending*
 
 ### s14: far-field radius 0.6 → 1.2 m (s01, on the sector)

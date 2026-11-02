@@ -10,5 +10,5 @@ boundaryField
     outlet      { type calculated; value uniform 0; }
     farfield    { type calculated; value uniform 0; }
     "(fuselage|stabilizers)"    { type boundaryCorrectedNutLowReWallFunction; value uniform 0; }
-    "wedge.*"   { type cyclic; }   // periodic sector sides (caseProperties sectors > 1)
+    "wedge.*"   { type cyclicAMI; }   // periodic sector sides (caseProperties sectors > 1)
 }

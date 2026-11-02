@@ -164,7 +164,7 @@ init_case() {
     echo "case      : $CASE"
     if [ "$MESHER" != snappy ]; then
         echo "mesher    : $MESHER"
-        [ "$SECTORS" = 1 ] || echo "sectors   : $SECTORS (one periodic wedge, cyclic sides wedgeA/wedgeB)"
+        [ "$SECTORS" = 1 ] || echo "sectors   : $SECTORS (one periodic wedge, cyclicAMI sides wedgeA/wedgeB)"
     else
         echo "geometry  : $GEOMETRY"
         echo "openscad  : $OPENSCAD"
@@ -347,12 +347,12 @@ patch_faces() {
     sed -n "/^ *$1\$/,/}/s/^ *nFaces *\([0-9]*\);/\1/p" constant/polyMesh/boundary
 }
 
-# After the stitch: the wedge's two sides become the rotational cyclic pair
-# wedgeA/wedgeB (the fields' "wedge.*" entries). v2512 reads the keyword
-# `transform`. matchTolerance is relative to the face size: the stitch moves
-# a few seam-edge points on one side only (s13: 18 points by 45 um, 1.1 % of
-# a 4 mm face), so 0.1 is needed; neighbouring faces are a whole face apart,
-# so no false match is possible.
+# After the stitch: the wedge's two sides become the rotational periodic
+# pair wedgeA/wedgeB (the fields' "wedge.*" entries), as cyclicAMI. A plain
+# cyclic needs identical faces, point for point, and the stitch splits a few
+# seam-edge faces on one side only (s13: 18 faces moved by 45 um, one with
+# 5 vertices against 4); AMI couples the sides by geometric overlap, which
+# is the identity up to those faces. v2512 reads the keyword `transform`.
 pair_sector_faces() {
     mv 0 0.fields
     cat > system/createPatchDict.sector <<'EOF'
@@ -364,8 +364,8 @@ patches
         name wedgeA;
         patchInfo
         {
-            type cyclic; neighbourPatch wedgeB; transform rotational;
-            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 0.1;
+            type cyclicAMI; neighbourPatch wedgeB; transform rotational;
+            rotationAxis (1 0 0); rotationCentre (0 0 0);
         }
         constructFrom patches; patches (cutA);
     }
@@ -373,8 +373,8 @@ patches
         name wedgeB;
         patchInfo
         {
-            type cyclic; neighbourPatch wedgeA; transform rotational;
-            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 0.1;
+            type cyclicAMI; neighbourPatch wedgeA; transform rotational;
+            rotationAxis (1 0 0); rotationCentre (0 0 0);
         }
         constructFrom patches; patches (cutB);
     }
@@ -383,7 +383,7 @@ EOF
     createPatch -overwrite -dict system/createPatchDict.sector > log.createPatch.sector 2>&1 || {
         rm -rf 0
         mv 0.fields 0
-        echo "error: createPatch could not pair the wedge faces as a cyclic; see log.createPatch.sector" >&2
+        echo "error: createPatch could not pair the wedge faces as a cyclicAMI; see log.createPatch.sector" >&2
         exit 1
     }
     rm -rf 0
@@ -392,7 +392,7 @@ EOF
         echo "error: cutA/cutB still present after pairing" >&2
         exit 1
     fi
-    echo "sector    : cyclic pair wedgeA/wedgeB of $(patch_faces wedgeA) faces each"
+    echo "sector    : cyclicAMI pair wedgeA/wedgeB of $(patch_faces wedgeA) faces each"
 }
 
 # Join the zone groups (non-conformal, ESI stitchMesh integral mode, one pair

@@ -37,7 +37,7 @@ boundaryField
         type            boundaryCorrectedFixedValue;
         value           uniform (0 0 0);
     }
-    "wedge.*"   { type cyclic; }   // periodic sector sides (caseProperties sectors > 1)
+    "wedge.*"   { type cyclicAMI; }   // periodic sector sides (caseProperties sectors > 1)
 }
 
 

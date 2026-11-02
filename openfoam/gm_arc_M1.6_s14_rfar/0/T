@@ -34,7 +34,7 @@ boundaryField
         type            characteristicWallTemperature;
         value           $internalField;
     }
-    "wedge.*"   { type cyclic; }   // periodic sector sides (caseProperties sectors > 1)
+    "wedge.*"   { type cyclicAMI; }   // periodic sector sides (caseProperties sectors > 1)
 }
 
 

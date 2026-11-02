@@ -11,5 +11,5 @@ boundaryField
     outlet      { type zeroGradient; }
     farfield    { type freestream; freestreamValue uniform $kInf; }
     "(fuselage|stabilizers)"    { type kLowReWallFunction; value uniform 1e-10; }
-    "wedge.*"   { type cyclic; }   // periodic sector sides (caseProperties sectors > 1)
+    "wedge.*"   { type cyclicAMI; }   // periodic sector sides (caseProperties sectors > 1)
 }
