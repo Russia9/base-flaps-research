@@ -7,9 +7,10 @@ set -euo pipefail
 #
 # Geometry parameters are read from constant/caseProperties. The case must
 # already exist; create one with scripts/create_case.py. A case with
-# system/gmshParams is meshed by scripts/gen_gmsh.py (zoned structured Gmsh
-# mesh, stitched in OpenFOAM; no OpenSCAD or snappyHexMesh). Otherwise the
-# snappy pipeline runs.
+# system/gmshParams is meshed by scripts/gen_mesh.py (zoned structured Gmsh
+# mesh, stitched in OpenFOAM; no OpenSCAD or snappyHexMesh); with
+# caseProperties `sectors N` > 1 only one periodic wedge is kept (cyclic
+# sides). Otherwise the snappy pipeline runs.
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -136,7 +137,7 @@ validate_config() {
     MESHER=snappy
     if [ -f "$CASE/system/gmshParams" ]; then
         MESHER=gmsh
-        DEPENDENCIES="${GMSH_PYTHON:-uv} gmshToFoam transformPoints foamDictionary stitchMesh createPatch decomposePar checkMesh"
+        DEPENDENCIES="${GMSH_PYTHON:-uv} gmshToFoam transformPoints foamDictionary stitchMesh createPatch topoSet subsetMesh decomposePar checkMesh"
     fi
 
     for exe in $DEPENDENCIES; do
@@ -155,10 +156,15 @@ init_case() {
     N=$(foam_scalar "$params" N 4)
     XI=$(foam_scalar "$params" xi 90)
     L=$(foam_scalar "$params" L 140.0)
+    SECTORS=$(foam_scalar "$params" sectors 1)
+    if [ "$SECTORS" != 1 ] && [ "$MESHER" = snappy ]; then
+        usage_error "sectors $SECTORS: a periodic sector needs the Gmsh mesh (system/gmshParams)"
+    fi
 
     echo "case      : $CASE"
     if [ "$MESHER" != snappy ]; then
         echo "mesher    : $MESHER"
+        [ "$SECTORS" = 1 ] || echo "sectors   : $SECTORS (one periodic wedge, cyclic sides wedgeA/wedgeB)"
     else
         echo "geometry  : $GEOMETRY"
         echo "openscad  : $OPENSCAD"
@@ -270,8 +276,87 @@ build_gmsh_mesh() {
         fi
     done
     rm -f mesh.msh
+    [ "$SECTORS" = 1 ] || cut_sector
     stitch_gmsh_seams
     decomposePar -force
+}
+
+# Keep one periodic wedge of the full mesh. gen_mesh.py lays out the finned
+# mesh so that every wedge boundary (fin k's gap-ray plane inside Gamma, the
+# strip G -> C1 between Gamma and P, the 45 deg plane outside P) is made of
+# block faces, and tags every block with its wedge: cell zones <zone>_w<k>.
+# Wedge 0 holds fin 0 (+Y); its two boundary surfaces are rotational copies
+# of each other, so the faces subsetMesh exposes form a cyclic pair. The
+# + side (52.79 deg at the wall, 45 deg at P) has z > 0, the - side z < 0.
+# Runs before the stitch, so the seams are stitched inside the wedge only,
+# and with 0/ aside (subsetMesh would try to map the fields).
+cut_sector() {
+    mv 0 0.fields
+    cat > system/topoSetDict.sector <<'EOF'
+FoamFile { version 2.0; format ascii; class dictionary; object topoSetDict; }
+actions
+(
+    { name wedge0; type cellSet; action new; source zoneToCell; zones (".*_w0"); }
+);
+EOF
+    cat > system/topoSetDict.sectorFaces <<'EOF'
+FoamFile { version 2.0; format ascii; class dictionary; object topoSetDict; }
+actions
+(
+    { name wedgeB; type faceSet; action new;    source patchToFace; patches (oldInternalFaces); }
+    { name wedgeB; type faceSet; action subset; source boxToFace;   box (-100 -100 0) (100 100 100); }
+    { name wedgeA; type faceSet; action new;    source patchToFace; patches (oldInternalFaces); }
+    { name wedgeA; type faceSet; action delete; source faceToFace;  set wedgeB; }
+);
+EOF
+    cat > system/createPatchDict.sector <<'EOF'
+FoamFile { version 2.0; format ascii; class dictionary; object createPatchDict; }
+pointSync false;
+patches
+(
+    {
+        name wedgeA;
+        patchInfo
+        {
+            type cyclic; neighbourPatch wedgeB; transformType rotational;
+            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 1e-3;
+        }
+        constructFrom set; set wedgeA;
+    }
+    {
+        name wedgeB;
+        patchInfo
+        {
+            type cyclic; neighbourPatch wedgeA; transformType rotational;
+            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 1e-3;
+        }
+        constructFrom set; set wedgeB;
+    }
+);
+EOF
+    topoSet -dict system/topoSetDict.sector > log.topoSet.sector 2>&1
+    subsetMesh -overwrite wedge0 > log.subsetMesh 2>&1          # exposed faces -> oldInternalFaces
+    topoSet -dict system/topoSetDict.sectorFaces > log.topoSet.sectorFaces 2>&1
+    createPatch -overwrite -dict system/createPatchDict.sector > log.createPatch.sector 2>&1 || {
+        rm -rf 0
+        mv 0.fields 0
+        echo "error: createPatch could not pair the wedge faces as a cyclic; see log.createPatch.sector" >&2
+        exit 1
+    }
+    rm -rf 0
+    mv 0.fields 0
+    local na nb
+    na=$(sed -n '/^ *wedgeA$/,/}/s/^ *nFaces *\([0-9]*\);/\1/p' constant/polyMesh/boundary)
+    nb=$(sed -n '/^ *wedgeB$/,/}/s/^ *nFaces *\([0-9]*\);/\1/p' constant/polyMesh/boundary)
+    [ -n "$na" ] && [ "$na" = "$nb" ] && [ "$na" -gt 0 ] || {
+        echo "error: wedge patches have $na / $nb faces" >&2
+        exit 1
+    }
+    if grep -q "^ *oldInternalFaces$" constant/polyMesh/boundary; then
+        echo "error: some exposed faces were not assigned to wedgeA/wedgeB" >&2
+        exit 1
+    fi
+    echo "sector    : kept wedge 0, cyclic pair wedgeA/wedgeB of $na faces each"
 }
 
 # Join the zone groups (non-conformal, ESI stitchMesh integral mode, one pair
@@ -321,7 +406,7 @@ verify_mesh() {
     # non-orthogonality) are reported only: the wall-resolved fin meshes
     # carry them at the fin-root junctions and the LE apex.
     if ! grep -q "Mesh OK" log.checkMesh; then
-        if grep -qE '[*]{3}(Zero or negative cell volume|Open cells|Error in face pyramids|Boundary openness)|incorrectly oriented|Number of regions: [2-9]' log.checkMesh; then
+        if grep -qE '[*]{3}(Zero or negative cell volume|Open cells|Error in face pyramids|Boundary openness)|incorrectly oriented|Number of regions: [2-9]|Coupled point location mismatch|face centres mismatch' log.checkMesh; then
             echo "error: checkMesh found broken cells or faces; see log.checkMesh" >&2
             exit 1
         fi

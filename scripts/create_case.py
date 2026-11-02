@@ -87,6 +87,7 @@ def write_case_properties(
     chord_mm: float,
     mach: float,
     gamma: float,
+    sectors: int,
 ) -> None:
     fin_note = "clean-body baseline: no stabilizers" if n_fins == 0 else f"L/D = {format_number(chord_mm / diameter_mm)}"
     text = f"""/*--------------------------------*- C++ -*----------------------------------*\\
@@ -111,6 +112,7 @@ xi          {format_number(xi)};
 L           {format_number(chord_mm)};  // mm, stabilizer chord ({fin_note})
 Mach        {format_number(mach)};
 gamma       {format_number(gamma)};
+sectors     {sectors};   // periodic sectors: 1 = full body, N = one 360/N deg wedge with cyclic sides (Gmsh mesh only)
 
 
 // ************************************************************************* //
@@ -159,6 +161,7 @@ def create_case(
     mach: float,
     gamma: float,
     force: bool,
+    sectors: int | None = None,
 ) -> float:
     case = case.resolve()
     template = template.resolve()
@@ -170,6 +173,14 @@ def create_case(
         raise ValueError("N must be >= 0")
     if n_fins > 0 and not 0 < xi < 360:
         raise ValueError("xi must be in (0, 360) degrees")
+    if sectors is None:
+        # inherit the template's sector count (older templates have none)
+        try:
+            sectors = int(parse_scalar((template / "constant" / "caseProperties").read_text(), "sectors"))
+        except (OSError, ValueError):
+            sectors = 1
+    if sectors != 1 and (n_fins == 0 or sectors != n_fins):
+        raise ValueError("sectors must be 1 or equal to N (one fin per periodic wedge)")
 
     if case.exists():
         if not force:
@@ -189,6 +200,7 @@ def create_case(
         chord_mm=chord_mm,
         mach=mach,
         gamma=gamma,
+        sectors=sectors,
     )
     u_mag = update_freestream(case, mach, gamma)
     (case / "case.foam").touch()
@@ -206,6 +218,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--L", type=float, default=140.0, help="fin chord in mm")
     p.add_argument("--Mach", type=float, required=True, help="freestream Mach number")
     p.add_argument("--gamma", type=float, default=1.4, help="specific heat ratio for UInf calculation")
+    p.add_argument("--sectors", type=int, default=None,
+                   help="periodic sectors to mesh: 1 = full body, N = one wedge with cyclic sides "
+                        "(default: the template's value, else 1)")
     return p
 
 
@@ -222,6 +237,7 @@ def main(argv: list[str]) -> int:
             mach=args.Mach,
             gamma=args.gamma,
             force=args.force,
+            sectors=args.sectors,
         )
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
