@@ -278,6 +278,7 @@ build_gmsh_mesh() {
     rm -f mesh.msh
     [ "$SECTORS" = 1 ] || cut_sector
     stitch_gmsh_seams
+    [ "$SECTORS" = 1 ] || pair_sector_faces
     decomposePar -force
 }
 
@@ -289,7 +290,11 @@ build_gmsh_mesh() {
 # of each other, so the faces subsetMesh exposes form a cyclic pair. The
 # + side (52.79 deg at the wall, 45 deg at P) has z > 0, the - side z < 0.
 # Runs before the stitch, so the seams are stitched inside the wedge only,
-# and with 0/ aside (subsetMesh would try to map the fields).
+# and with 0/ aside (subsetMesh would try to map the fields). The two sides
+# stay plain patches (cutA, cutB) while the seams are stitched: a stitch
+# moves points on the seam's own side first, and OpenFOAM re-orders a cyclic
+# after every topology change, so an intermediate state fails. They become
+# the cyclic pair wedgeA/wedgeB afterwards (pair_sector_faces).
 cut_sector() {
     mv 0 0.fields
     cat > system/topoSetDict.sector <<'EOF'
@@ -303,12 +308,51 @@ EOF
 FoamFile { version 2.0; format ascii; class dictionary; object topoSetDict; }
 actions
 (
-    { name wedgeB; type faceSet; action new;    source patchToFace; patches (oldInternalFaces); }
-    { name wedgeB; type faceSet; action subset; source boxToFace;   box (-100 -100 0) (100 100 100); }
-    { name wedgeA; type faceSet; action new;    source patchToFace; patches (oldInternalFaces); }
-    { name wedgeA; type faceSet; action delete; source faceToFace;  set wedgeB; }
+    { name cutB; type faceSet; action new;    source patchToFace; patches (oldInternalFaces); }
+    { name cutB; type faceSet; action subset; source boxToFace;   box (-100 -100 0) (100 100 100); }
+    { name cutA; type faceSet; action new;    source patchToFace; patches (oldInternalFaces); }
+    { name cutA; type faceSet; action delete; source faceToFace;  set cutB; }
 );
 EOF
+    cat > system/createPatchDict.sectorCut <<'EOF'
+FoamFile { version 2.0; format ascii; class dictionary; object createPatchDict; }
+pointSync false;
+patches
+(
+    { name cutA; patchInfo { type patch; } constructFrom set; set cutA; }
+    { name cutB; patchInfo { type patch; } constructFrom set; set cutB; }
+);
+EOF
+    topoSet -dict system/topoSetDict.sector > log.topoSet.sector 2>&1
+    subsetMesh -overwrite wedge0 > log.subsetMesh 2>&1          # exposed faces -> oldInternalFaces
+    topoSet -dict system/topoSetDict.sectorFaces > log.topoSet.sectorFaces 2>&1
+    createPatch -overwrite -dict system/createPatchDict.sectorCut > log.createPatch.sectorCut 2>&1
+    rm -rf 0
+    mv 0.fields 0
+    local na nb
+    na=$(patch_faces cutA)
+    nb=$(patch_faces cutB)
+    [ -n "$na" ] && [ "$na" = "$nb" ] && [ "$na" -gt 0 ] || {
+        echo "error: the wedge's two sides have $na / $nb faces" >&2
+        exit 1
+    }
+    if grep -q "^ *oldInternalFaces$" constant/polyMesh/boundary; then
+        echo "error: some exposed faces were not assigned to cutA/cutB" >&2
+        exit 1
+    fi
+    echo "sector    : kept wedge 0, $na faces on each side"
+}
+
+patch_faces() {
+    sed -n "/^ *$1\$/,/}/s/^ *nFaces *\([0-9]*\);/\1/p" constant/polyMesh/boundary
+}
+
+# After the stitch: the wedge's two sides become the rotational cyclic pair
+# wedgeA/wedgeB (the fields' "wedge.*" entries). v2512 reads the keyword
+# `transform`; matchTolerance is relative to the face size, and the stitch
+# moves seam-edge points by a few um on both sides alike.
+pair_sector_faces() {
+    mv 0 0.fields
     cat > system/createPatchDict.sector <<'EOF'
 FoamFile { version 2.0; format ascii; class dictionary; object createPatchDict; }
 pointSync false;
@@ -318,25 +362,22 @@ patches
         name wedgeA;
         patchInfo
         {
-            type cyclic; neighbourPatch wedgeB; transformType rotational;
-            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 1e-3;
+            type cyclic; neighbourPatch wedgeB; transform rotational;
+            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 1e-2;
         }
-        constructFrom set; set wedgeA;
+        constructFrom patches; patches (cutA);
     }
     {
         name wedgeB;
         patchInfo
         {
-            type cyclic; neighbourPatch wedgeA; transformType rotational;
-            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 1e-3;
+            type cyclic; neighbourPatch wedgeA; transform rotational;
+            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 1e-2;
         }
-        constructFrom set; set wedgeB;
+        constructFrom patches; patches (cutB);
     }
 );
 EOF
-    topoSet -dict system/topoSetDict.sector > log.topoSet.sector 2>&1
-    subsetMesh -overwrite wedge0 > log.subsetMesh 2>&1          # exposed faces -> oldInternalFaces
-    topoSet -dict system/topoSetDict.sectorFaces > log.topoSet.sectorFaces 2>&1
     createPatch -overwrite -dict system/createPatchDict.sector > log.createPatch.sector 2>&1 || {
         rm -rf 0
         mv 0.fields 0
@@ -345,18 +386,11 @@ EOF
     }
     rm -rf 0
     mv 0.fields 0
-    local na nb
-    na=$(sed -n '/^ *wedgeA$/,/}/s/^ *nFaces *\([0-9]*\);/\1/p' constant/polyMesh/boundary)
-    nb=$(sed -n '/^ *wedgeB$/,/}/s/^ *nFaces *\([0-9]*\);/\1/p' constant/polyMesh/boundary)
-    [ -n "$na" ] && [ "$na" = "$nb" ] && [ "$na" -gt 0 ] || {
-        echo "error: wedge patches have $na / $nb faces" >&2
-        exit 1
-    }
-    if grep -q "^ *oldInternalFaces$" constant/polyMesh/boundary; then
-        echo "error: some exposed faces were not assigned to wedgeA/wedgeB" >&2
+    if grep -qE "^ *cut[AB]$" constant/polyMesh/boundary; then
+        echo "error: cutA/cutB still present after pairing" >&2
         exit 1
     fi
-    echo "sector    : kept wedge 0, cyclic pair wedgeA/wedgeB of $na faces each"
+    echo "sector    : cyclic pair wedgeA/wedgeB of $(patch_faces wedgeA) faces each"
 }
 
 # Join the zone groups (non-conformal, ESI stitchMesh integral mode, one pair
