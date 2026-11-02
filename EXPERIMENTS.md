@@ -562,6 +562,15 @@ Hypothesis: the sector reproduces the full body. Pass: Mx within ±0.0003
 of −0.00204, Cx within ±0.003 of 0.630 (s04–s06 moved the wake cells and
 changed Mx by < 0.0002, so the wake layout should not matter). This is
 also the first HiSA run with a cyclic pair; a failure here fails the queue.
+First launch (2026-11-02 23:15 UTC): the cut worked (2,835,124 cells, 49,775
+faces per side) but createPatch could not order the cyclic faces: the edge
+distributions broke ties towards the parametric start, so rotated copies
+of an edge with opposite parametrisation got mirror-asymmetric nodes (2 mm
+at the far-field end cap). `size_driven`/`two_sided` are now symmetric
+under swapping the ends. Checked on a coarsened test mesh: every node on
+a wedge boundary has its 90° image within 1e-11 mm. Interior nodes in the
+fin hoods and columns still differ between fins by up to 0.4 mm (same in
+every earlier full-body Gmsh run; not on the cyclic faces).
 Result: *pending*
 
 ### s14: far-field radius 0.6 → 1.2 m (s01, on the sector)

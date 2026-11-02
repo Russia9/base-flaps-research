@@ -43,8 +43,27 @@ class End:
             return math.inf
 
 
+def _end_key(e: End) -> tuple:
+    return (e.h, e.q, e.n_layers, e.q_layer)
+
+
+def _mirror(sz: list[float]) -> list[float]:
+    return [0.5 * (x + y) for x, y in zip(sz, sz[::-1])]
+
+
 def size_driven(length: float, a: End, b: End, hmax: float) -> list[float]:
-    """Grow cells from both ends (capped at hmax) until the edge is full."""
+    """Grow cells from both ends (capped at hmax) until the edge is full.
+    Symmetric under swapping the ends: rotated copies of an edge may be
+    parametrised in opposite directions and must get mirror-image nodes, or
+    the periodic wedge faces do not match (createPatch: face ordering)."""
+    ka, kb = _end_key(a), _end_key(b)
+    if kb < ka:
+        return _size_driven(length, b, a, hmax)[::-1]
+    sz = _size_driven(length, a, b, hmax)
+    return _mirror(sz) if ka == kb else sz
+
+
+def _size_driven(length: float, a: End, b: End, hmax: float) -> list[float]:
     A: list[float] = []
     B: list[float] = []
     total = 0.0
@@ -70,7 +89,17 @@ def size_driven(length: float, a: End, b: End, hmax: float) -> list[float]:
 
 def two_sided(L: float, n: int, a: End, b: End) -> tuple[list[float], bool]:
     """n cell sizes over L from end condition a to b. Returns the sizes and
-    whether both were met (False: too few cells, stacks were merged)."""
+    whether both were met (False: too few cells, stacks were merged).
+    Symmetric under swapping the ends (see size_driven)."""
+    ka, kb = _end_key(a), _end_key(b)
+    if kb < ka:
+        sz, ok = _two_sided(L, n, b, a)
+        return sz[::-1], ok
+    sz, ok = _two_sided(L, n, a, b)
+    return (_mirror(sz) if ka == kb else sz), ok
+
+
+def _two_sided(L: float, n: int, a: End, b: End) -> tuple[list[float], bool]:
     lo, hi = min(a.h, b.h, L), L
     if len(size_driven(L, a, b, lo)) < n:                 # short edge: split the largest cells
         sz = size_driven(L, a, b, lo)
