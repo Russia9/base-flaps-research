@@ -20,7 +20,7 @@ DRY_RUN=0
 RESUME=0
 NP=${NP:-12}
 DEPENDENCIES="mpirun hisa checkMesh foamListTimes reconstructPar"
-FIELDS="U p T k omega nut alphat"
+FIELDS="U p T nut alphat"        # plus the turbulence model's own fields (turbulence_fields)
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 usage() {
@@ -130,9 +130,22 @@ preflight() {
     require_body_patch "$CASE/constant/polyMesh/boundary"
     require_body_patch "$CASE/processor0/constant/polyMesh/boundary"
 
-    for field in $FIELDS; do
+    for field in $FIELDS $(turbulence_fields); do
         require_file "$CASE/processor0/0/$field"
     done
+}
+
+# The transported fields of the case's RAS model (constant/turbulenceProperties).
+turbulence_fields() {
+    local model
+    model=$(sed -nE 's/^[[:space:]]*RASModel[[:space:]]+([A-Za-z0-9]+)[[:space:]]*;.*/\1/p' \
+        "$CASE/constant/turbulenceProperties" | head -n 1)
+    case "$model" in
+        kOmegaSST|kOmega) echo "k omega" ;;
+        SpalartAllmaras)  echo "nuTilda" ;;
+        kEpsilon|realizableKE) echo "k epsilon" ;;
+        *) echo "" ;;
+    esac
 }
 
 clean_outputs() {
