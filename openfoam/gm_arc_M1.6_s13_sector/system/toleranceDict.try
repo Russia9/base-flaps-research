@@ -1,0 +1,9 @@
+FoamFile { version 2.0; format ascii; class dictionary; object toleranceDict; }
+pointMergeTol 0.45;
+edgeMergeTol 0.2;
+nFacesPerSlaveEdge 20;
+edgeFaceEscapeLimit 20;
+integralAdjTol 0.05;
+edgeMasterCatchFraction 0.4;
+edgeCoPlanarTol 0.8;
+edgeEndCutoffTol 0.0001;

@@ -532,10 +532,75 @@ The open question is unchanged: snappy keeps the convex TE bevel attached and
 lands in the band; Gmsh separates both bevels (s07, s08) and gets the wrong
 sign. Which TE flow is physical decides it.
 
+### s13–s16: one unattended queue (2026-11-03)
+Prompted by Sharma & Kumar, "A Ready Reckoner of CFD for Wrap-around Fins"
+(INCAS Bull. 11(2) 2019, `literature/mesh-literature.pdf`), and the
+professor's suggestion to try Spalart-Allmaras. The four steps form a
+ladder, each one change from the previous, run back to back by
+`scripts/run_queue.sh` on the server (`endTime 2000` for all four; the Gmsh
+family was read at it. 1500 so far). Template: `gm_arc_M1.6` (Mx −0.00204,
+Cx 0.630, 10.86 M cells).
+
+### s13: 90° periodic sector of the Gmsh mesh
+Case `gm_arc_M1.6_s13_sector`: `caseProperties` `sectors 4`. At α = 0 the
+flow is 4-fold periodic, so one fin in a 90° wedge with cyclic sides is the
+same problem at a quarter of the cells. `gen_mesh.py` tags every block with
+its wedge (cell zones `<zone>_w<k>`); `rebuild-mesh.sh` keeps wedge 0 (fin
+0, +Y) with `topoSet`/`subsetMesh`, pairs the exposed faces as a rotational
+`cyclic` (`wedgeA` z < 0, `wedgeB` z > 0), then stitches the seams inside
+the wedge. `post_process.py` and `wall_breakdown.py` scale Cx, Mx and the
+areas by `sectors`; Cy, Cz, My, Mz are one fin's and are no longer a check.
+Layout change forced by the cut: the wedge boundary is the gap-ray plane
+(52.79° from the fin) inside Γ and the strip G → C1 (to 45° on P) outside
+it, and the wake and far end caps used 20 radial rays with the axis inside
+a core block. They now take the sleeve's ring (16 rays, square core on the
+bisector rays, rim cylinder) plus the outer zone's lines to P, leaving W
+twice (one prism per fin, W–E–D). The equal-wedge-volume check in
+`checks.py` confirms the classification. Full mesh 11.32 M (was 10.86;
+wake 0.79 vs 0.56 M, far 0.43 vs 0.33 M), wedge ≈ 2.8 M.
+Hypothesis: the sector reproduces the full body. Pass: Mx within ±0.0003
+of −0.00204, Cx within ±0.003 of 0.630 (s04–s06 moved the wake cells and
+changed Mx by < 0.0002, so the wake layout should not matter). This is
+also the first HiSA run with a cyclic pair; a failure here fails the queue.
+Result: *pending*
+
+### s14: far-field radius 0.6 → 1.2 m (s01, on the sector)
+Case `gm_arc_M1.6_s14_rfar`: s13 with `rFar 1200`. The review's rule of
+thumb is a radial extent of several body lengths; ours is 0.75 L. s00's
+wave-path argument says the nose wave leaves at x ≈ 0.62 m and a reflection
+could reach the body only behind the base, and the characteristic far field
+passed 6 % of the amplitude. Full mesh 12.16 M (far 1.28 M), wedge ≈ 3.0 M.
+Hypothesis: no change. Pass: same band as s13.
+Result: *pending*
+
+### s15: wall growth 1.4 → 1.2
+Case `gm_arc_M1.6_s15_layer12`: s14 with `layerRatio 1.2`. The review's
+rule for y⁺ ≈ 1 meshes is a growth ≤ 1.2; our 13-cell stack grows at 1.4
+(0.59 mm thick, then 1.2). With `layerRatio = growth` the stack is one 1.2
+progression from 3 µm: ~10 more cells on every wall-normal edge. Full mesh
+16.04 M (fins 8.95 vs 5.51 M), wedge ≈ 4.0 M. s11 left the bevel-normal
+cells past the 0.6 mm stack as one of the remaining differences to
+`finwake`.
+Hypothesis: a change here means the wall-normal resolution past the stack
+matters for the TE-bevel separation. Pass: unchanged from s14 means the
+stack is converged.
+Result: *pending*
+
+### s16: Spalart-Allmaras
+Case `gm_arc_M1.6_s16_sa`: s15 with `RASModel SpalartAllmaras`, `0/nuTilda`
+(freestream 3 ν∞ = 1.556e-4 m²/s per Spalart & Rumsey 2007, 0 at the wall,
+`k`/`omega` removed), `div(phi,nuTilda)` and `grad(nuTilda)` as for k/ω,
+relaxation 0.5. `run-simulation.sh` now derives the required fields from
+the RAS model. SST's shear-stress limiter separates earlier under an adverse
+pressure gradient than SA; the roll sign is decided by whether the convex
+TE bevel separates within 1 mm of the shoulder (s07).
+Hypothesis: SA keeps the convex bevel attached and Mx moves towards
+`finwake`'s +0.0086. Report Mx against +0.0094 and the TE map
+(`results/<case>/te_map.txt`, Cf_x sign on both bevels). A pass is not
+proof that SA is right; the comparison is the result.
+Result: *pending*
+
 ### Planned
-- 90° periodic sector of the Gmsh mesh (4× fewer cells): deferred. Every
-  zone needs one shared side surface at the seam planes x0 and xSlabEnd,
-  so the wake and far zones would need the slab's cross-section layout
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
 - downstream trim (outlet 5.6 → 2.4 m, ~−0.4 M cells), then a small base refinement (level-5 disk x 0.80–0.82)
