@@ -349,8 +349,10 @@ patch_faces() {
 
 # After the stitch: the wedge's two sides become the rotational cyclic pair
 # wedgeA/wedgeB (the fields' "wedge.*" entries). v2512 reads the keyword
-# `transform`; matchTolerance is relative to the face size, and the stitch
-# moves seam-edge points by a few um on both sides alike.
+# `transform`. matchTolerance is relative to the face size: the stitch moves
+# a few seam-edge points on one side only (s13: 18 points by 45 um, 1.1 % of
+# a 4 mm face), so 0.1 is needed; neighbouring faces are a whole face apart,
+# so no false match is possible.
 pair_sector_faces() {
     mv 0 0.fields
     cat > system/createPatchDict.sector <<'EOF'
@@ -363,7 +365,7 @@ patches
         patchInfo
         {
             type cyclic; neighbourPatch wedgeB; transform rotational;
-            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 1e-2;
+            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 0.1;
         }
         constructFrom patches; patches (cutA);
     }
@@ -372,7 +374,7 @@ patches
         patchInfo
         {
             type cyclic; neighbourPatch wedgeA; transform rotational;
-            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 1e-2;
+            rotationAxis (1 0 0); rotationCentre (0 0 0); matchTolerance 0.1;
         }
         constructFrom patches; patches (cutB);
     }
