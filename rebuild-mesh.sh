@@ -392,6 +392,17 @@ EOF
         echo "error: cutA/cutB still present after pairing" >&2
         exit 1
     fi
+    # faceSet for decomposeParDict's singleProcessorFaceSets constraint: both
+    # sides on one processor, so the AMI is not distributed (HiSA evaluates
+    # boundaries with blocking communication, which a distributed AMI rejects)
+    cat > system/topoSetDict.sectorSet <<'EOF'
+FoamFile { version 2.0; format ascii; class dictionary; object topoSetDict; }
+actions
+(
+    { name wedgeFaces; type faceSet; action new; source patchToFace; patches (wedgeA wedgeB); }
+);
+EOF
+    topoSet -dict system/topoSetDict.sectorSet > log.topoSet.sectorSet 2>&1
     echo "sector    : cyclicAMI pair wedgeA/wedgeB of $(patch_faces wedgeA) faces each"
 }
 

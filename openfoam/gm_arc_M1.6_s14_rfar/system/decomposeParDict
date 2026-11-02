@@ -18,5 +18,19 @@ numberOfSubdomains 12;
 
 method          scotch;
 
+// Periodic sector: both sides of the cyclicAMI pair stay on one processor
+// (rebuild-mesh.sh writes the faceSet wedgeFaces). HiSA evaluates boundary
+// fields with blocking communication, which OpenFOAM refuses for an AMI
+// split across processors ("Can only evaluate distributed AMI with
+// nonBlocking").
+constraints
+{
+    sector
+    {
+        type    singleProcessorFaceSets;
+        sets    ((wedgeFaces -1));
+    }
+}
+
 
 // ************************************************************************* //
