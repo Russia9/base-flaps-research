@@ -25,7 +25,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from post_process import D_REF, S_REF, parse_freestream
+from post_process import D_REF, S_REF, parse_freestream, read_sectors
 
 SAMPLE_DICT = """FoamFile { version 2.0; format ascii; class dictionary; object wallSample; }
 functions
@@ -115,6 +115,7 @@ def main() -> int:
     p_inf, q = fs["pInf"], fs["qInf"]
     diameter = read_case_scalar(case, "D") / 1000.0
     nose_len, body_len = 2.0 * diameter, 10.0 * diameter
+    sectors = read_sectors(case)     # a periodic wedge holds 1/sectors of every x force, roll and area
 
     with tempfile.TemporaryDirectory() as tmp:
         dict_path = Path(tmp) / "wallSample"
@@ -132,11 +133,11 @@ def main() -> int:
     def add(key, force_p, force_v, centre, area):
         r = rows.setdefault(key, [0.0] * 5)
         _, y, z = centre
-        r[0] += force_p[0]
-        r[1] += force_v[0]
-        r[2] += y * force_p[2] - z * force_p[1]
-        r[3] += y * force_v[2] - z * force_v[1]
-        r[4] += area
+        r[0] += sectors * force_p[0]
+        r[1] += sectors * force_v[0]
+        r[2] += sectors * (y * force_p[2] - z * force_p[1])
+        r[3] += sectors * (y * force_v[2] - z * force_v[1])
+        r[4] += sectors * area
 
     patches = ["fuselage"] + (["stabilizers"] if (sample / "stabilizers").is_dir() else [])
     fin_lateral_sum: dict[int, float] = {}

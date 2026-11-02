@@ -47,6 +47,18 @@ def parse_freestream(case: Path) -> dict[str, float]:
             "rhoInf": rho, "qInf": q}
 
 
+def read_sectors(case: Path) -> int:
+    """Periodic sectors meshed (caseProperties `sectors`, default 1). A
+    360/N-degree wedge carries 1/N of the axial force and roll; the lateral
+    components of one wedge cancel over the N copies and are left as they
+    are."""
+    try:
+        text = (case / "constant" / "caseProperties").read_text()
+        return int(read_scalar(text, "sectors"))
+    except (OSError, ValueError):
+        return 1
+
+
 def parse_force_file(path: Path) -> list[dict[str, float]]:
     """Parse OpenFOAM v2512 force.dat / moment.dat.
 
@@ -101,6 +113,7 @@ def main(argv: list[str]) -> int:
     fs = parse_freestream(case)
     q_s = fs["qInf"] * S_REF
     q_s_d = q_s * D_REF
+    sx = read_sectors(case)          # scales the x (axial) force and moment only
 
     forces_dir = find_forces_dir(case)
     forces = parse_force_file(forces_dir / "force.dat")
@@ -125,12 +138,12 @@ def main(argv: list[str]) -> int:
         for f, m in zip(forces, moments):
             row = [
                 f["time"],
-                f["x"] / q_s, f["y"] / q_s, f["z"] / q_s,
-                m["x"] / q_s_d, m["y"] / q_s_d, m["z"] / q_s_d,
-                f["px"] / q_s, f["py"] / q_s, f["pz"] / q_s,
-                f["vx"] / q_s, f["vy"] / q_s, f["vz"] / q_s,
-                m["px"] / q_s_d, m["py"] / q_s_d, m["pz"] / q_s_d,
-                m["vx"] / q_s_d, m["vy"] / q_s_d, m["vz"] / q_s_d,
+                sx * f["x"] / q_s, f["y"] / q_s, f["z"] / q_s,
+                sx * m["x"] / q_s_d, m["y"] / q_s_d, m["z"] / q_s_d,
+                sx * f["px"] / q_s, f["py"] / q_s, f["pz"] / q_s,
+                sx * f["vx"] / q_s, f["vy"] / q_s, f["vz"] / q_s,
+                sx * m["px"] / q_s_d, m["py"] / q_s_d, m["pz"] / q_s_d,
+                sx * m["vx"] / q_s_d, m["vy"] / q_s_d, m["vz"] / q_s_d,
             ]
             fh.write(",".join(f"{v:.8e}" for v in row) + "\n")
 
@@ -168,9 +181,11 @@ def main(argv: list[str]) -> int:
           f"UInfMag={fs['UInfMag']:.1f} m/s  rhoInf={fs['rhoInf']:.4f} kg/m^3")
     print(f"qInf          : {fs['qInf']:.1f} Pa")
     print(f"D, S          : {D_REF} m, {S_REF:.4e} m^2")
-    print(f"Cx, Cy, Cz    : {mean(forces, 'x', q_s):+.4f}, "
+    if sx != 1:
+        print(f"sectors       : {sx} (Cx and Mx scaled from one periodic wedge; Cy, Cz, My, Mz are the wedge's own)")
+    print(f"Cx, Cy, Cz    : {mean(forces, 'x', q_s / sx):+.4f}, "
           f"{mean(forces, 'y', q_s):+.4f}, {mean(forces, 'z', q_s):+.4f}")
-    print(f"Mx, My, Mz    : {mean(moments, 'x', q_s_d):+.4f}, "
+    print(f"Mx, My, Mz    : {mean(moments, 'x', q_s_d / sx):+.4f}, "
           f"{mean(moments, 'y', q_s_d):+.4f}, {mean(moments, 'z', q_s_d):+.4f}")
     print(f"output        : {out}")
     print(f"                {out_forces}")
