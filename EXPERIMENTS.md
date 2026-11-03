@@ -577,7 +577,15 @@ broke it), and then a plain `cyclic` still failed: the stitch moved 18
 seam-edge points by 45 µm and split one face on one side only (5 vertices
 against 4), and a cyclic needs identical faces. The pair is therefore a
 `cyclicAMI` (geometric overlap, the identity up to those faces).
-Result: *pending*
+**Result (2026-11-03): pass.** 2,835,124 cells (a quarter of 11.32 M),
+9.7 s/it on 12 ranks, 2000 its in 5.3 h, 12 GB. AMI weights 1.000 on both
+sides. Mean of the last 100 its: Cx 0.6293 (p 0.5402, v 0.0892), Mx −0.00218
+(p −0.00204, v −0.00014), flat from it. 1000 (±0.00002). Against
+`gm_arc_M1.6` (Cx 0.630, Mx −0.00204): ΔMx −0.00014, ΔCx −0.0007, inside the
+band. Region split (`wall_breakdown.csv`, ×4): nose 0.179, cylinder 0.051,
+fins 0.201, base 0.198; fin roll −0.00208, body −0.00009. The sector is the
+Gmsh family's baseline from here on (4× cheaper; Cy, Cz, My, Mz are one
+fin's and no longer a check).
 
 ### s14: far-field radius 0.6 → 1.2 m (s01, on the sector)
 Case `gm_arc_M1.6_s14_rfar`: s13 with `rFar 1200`. The review's rule of
@@ -586,7 +594,19 @@ wave-path argument says the nose wave leaves at x ≈ 0.62 m and a reflection
 could reach the body only behind the base, and the characteristic far field
 passed 6 % of the amplitude. Full mesh 12.16 M (far 1.28 M), wedge ≈ 3.0 M.
 Hypothesis: no change. Pass: same band as s13.
-Result: *pending*
+**Result (2026-11-03): inconclusive, Mx does not settle.** 3,048,172 cells,
+10.7 s/it, 2000 its in 6.0 h. Cx 0.6290 (p 0.5398, v 0.0892): unchanged.
+Mx is not steady: the 100-it means wander between −0.0003 and −0.0011 from
+it. 1000 on (s13: −0.00218 ± 0.00002 over the same span), and within the
+last 300 its the instantaneous value sweeps from 0.0000 to −0.0018 with a
+period of a few tens of iterations. The oscillation is in the fin loading
+(Cx steady to 0.0003; `wall_breakdown` at it. 2000: fins −0.00073, body
+−0.00009). The only input change is `rFar`, but it also doubles the far
+zone's circumferential count (that family runs through the whole far zone),
+so the far side of every seam with the inner groups is finer too. Neither a
+pass nor a measured change: a pseudo-time oscillation of the residual
+quantity. Options: resume s14 for +1000 its to see whether it decays, or
+hold `hFar`'s circumferential count at s13's and move only the radius.
 
 ### s15: wall growth 1.4 → 1.2
 Case `gm_arc_M1.6_s15_layer12`: s14 with `layerRatio 1.2`. The review's
