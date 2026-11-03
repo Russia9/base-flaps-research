@@ -607,6 +607,10 @@ so the far side of every seam with the inner groups is finer too. Neither a
 pass nor a measured change: a pseudo-time oscillation of the residual
 quantity. Options: resume s14 for +1000 its to see whether it decays, or
 hold `hFar`'s circumferential count at s13's and move only the radius.
+Decision (user, 2026-11-03): let s15 and s16 finish, then resume s14 to
+it. 3000 (`endTime 3000`, `run-simulation.sh --resume`; the resumed part
+lands in `postProcessing/forces/2000`, so `coefficients.csv` then covers
+its. 2001–3000 and the first 2000 are in the result commit 3d6825c).
 
 ### s15: wall growth 1.4 → 1.2
 Case `gm_arc_M1.6_s15_layer12`: s14 with `layerRatio 1.2`. The review's
