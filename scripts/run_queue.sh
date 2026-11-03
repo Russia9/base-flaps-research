@@ -53,7 +53,10 @@ for case in "$@"; do
     fi
     note "$name: solve done; $(grep -E '^(Cx|Mx)' "$ROOT/queue.$name.solve.log" | tr '\n' ' ')"
     if python3 scripts/wall_breakdown.py "$case" >> "$ROOT/queue.$name.solve.log" 2>&1; then
-        python3 scripts/te_map.py "$case" "$REF" > "results/$name/te_map.txt" 2>> "$ROOT/queue.$name.solve.log" \
+        # te_map.py maps the case and, when its wall sample exists, the reference case beside it
+        ref=()
+        [ -d "$REF/postProcessing/wallSample" ] && ref=("$REF")
+        python3 scripts/te_map.py "$case" "${ref[@]}" > "results/$name/te_map.txt" 2>> "$ROOT/queue.$name.solve.log" \
             || note "$name: te_map.py failed (non-fatal)"
     else
         note "$name: wall_breakdown.py failed (non-fatal)"
