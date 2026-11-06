@@ -32,6 +32,10 @@ DEFAULTS: dict[str, float] = {
     # apex stays at x = z0 and the wedge moves forward. hLERound: chordwise
     # cell at the rounded apex (hLE stays at the TE)
     "finLERadius": 0.0, "hLERound": 0.04,
+    # uniform refinement ladder: every size cap is multiplied by coarsen (the
+    # wall stacks and seam/LE end conditions stay); < 1 refines. The CLI
+    # flag --coarsen overrides it.
+    "coarsen": 1.0,
 }
 INTEGER = ("nTheta", "nLayers")
 _ENTRY = re.compile(r"^\s*([A-Za-z]\w*)\s+([-+0-9.eE]+)\s*;", re.MULTILINE)

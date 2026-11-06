@@ -78,7 +78,7 @@ def main(argv: list[str]) -> int:
         print("checks:")
         print("\n".join(checks.check(body, P, info)))
         if args.budget or args.volume or args.test_mesh:
-            gs = spacing.spacing(info, P, args.coarsen)
+            gs = spacing.spacing(info, P, args.coarsen if args.coarsen != 1.0 else P["coarsen"])
             print("budget:")
             print("\n".join(spacing.report(gs)))
             if args.volume or args.test_mesh:
