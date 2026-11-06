@@ -527,6 +527,8 @@ Re-scored at Ma 1.6:
 | `s02` | +0.0059 | 63 %, borderline (edge of the band) |
 | `fin6` | ≈ 0 | fail |
 | Gmsh `gm_arc_M1.6`, s06, s08, s09 | −0.0020 … −0.0022 | wrong sign, fail |
+| Gmsh sector s13 (= full body) | −0.0022 | wrong sign, fail |
+| s14 rFar 1.2 m / s15 growth 1.2 / s16 SA | −0.0007 (oscillating) / −0.0017 / −0.0004 | wrong sign, fail |
 
 The open question is unchanged: snappy keeps the convex TE bevel attached and
 lands in the band; Gmsh separates both bevels (s07, s08) and gets the wrong
@@ -611,6 +613,17 @@ Decision (user, 2026-11-03): let s15 and s16 finish, then resume s14 to
 it. 3000 (`endTime 3000`, `run-simulation.sh --resume`; the resumed part
 lands in `postProcessing/forces/2000`, so `coefficients.csv` then covers
 its. 2001–3000 and the first 2000 are in the result commit 3d6825c).
+**Result at it. 3000 (2026-11-04): still oscillating, mean about −0.0007.**
+100-it means over its. 2000–3000: −0.00105, −0.00027, −0.00066, −0.00110,
+−0.00025; instantaneous range −0.0016 … +0.0006. Cx 0.6289. The
+extension did not help: the larger domain turns s13's steady −0.00218
+into an oscillation around −0.0007. The wall split at it. 3000 shows
+where: the flat concave side −0.0703 (s13 −0.0713) and the flat convex
+side +0.0559 (s13 +0.0548), the LE/TE bevels unchanged to 0.0001. So the
+fin's flat-surface loading, not the bevels, moves with the far field, by
+about 1.5 % of each side, and does not settle. Whether that is the
+boundary distance or the far zone's finer seams is open (both changed).
+`results/gm_arc_M1.6_s14_rfar/coefficients.csv` holds all 3000 its.
 
 ### s15: wall growth 1.4 → 1.2
 Case `gm_arc_M1.6_s15_layer12`: s14 with `layerRatio 1.2`. The review's
@@ -623,7 +636,16 @@ cells past the 0.6 mm stack as one of the remaining differences to
 Hypothesis: a change here means the wall-normal resolution past the stack
 matters for the TE-bevel separation. Pass: unchanged from s14 means the
 stack is converged.
-Result: *pending*
+**Result (2026-11-03): small change, inside the s14 noise.** 4,019,396
+cells, 14.4 s/it, 2000 its in 8.1 h. Cx 0.6272 (p 0.5379, v 0.0893; base
+0.1962 vs 0.1972), Mx −0.00171 (p −0.00156, v −0.00014), 100-it means
+−0.0016 … −0.0019 from it. 750, instantaneous range −0.0026 … −0.0009
+(noisier than s13's ±0.00002, quieter than s14). Fin roll −0.00192. The TE
+map is s13's: both bevels separate ~0.5 mm past the shoulder, convex
+Cf_x −0.6 … −1.0·10⁻³. The finer wall-normal stack changes neither the
+separation nor the sign; it moves Cx by −0.002 and Mx by about +0.0005
+against s13, less than s14's oscillation. The stack is converged for this
+question.
 
 ### s16: Spalart-Allmaras
 Case `gm_arc_M1.6_s16_sa`: s15 with `RASModel SpalartAllmaras`, `0/nuTilda`
@@ -637,7 +659,19 @@ Hypothesis: SA keeps the convex bevel attached and Mx moves towards
 `finwake`'s +0.0086. Report Mx against +0.0094 and the TE map
 (`results/<case>/te_map.txt`, Cf_x sign on both bevels). A pass is not
 proof that SA is right; the comparison is the result.
-Result: *pending*
+**Result (2026-11-04): fail. SA separates both bevels too and raises the
+base drag.** 4,019,396 cells (s15's mesh), 2000 its in 7.8 h. Mx −0.00040
+(p −0.00026, v −0.00014), 100-it means −0.0004 … −0.0006 from it. 1000,
+instantaneous range −0.0014 … +0.0003; fin roll −0.00071. The convex TE
+bevel still separates: Cf_x −0.8 … −1.4·10⁻³ over the last 2.5 mm, SA only
+moves the separation ~1 mm aft (reattached-looking +0.07 … +0.17·10⁻³ at
+3.75 mm before the TE where SST has −0.8). Both sides stay symmetric, so
+the roll stays a small residual of the wrong sign. The axial force is
+worse: Cx 0.6711 (p 0.5718, v 0.0993), base C_Ab 0.229 against SST's
+0.196 and the MDAC target 0.150 (base Cp −0.247 at r = 25 mm vs −0.206),
+cylinder friction 0.0573 vs 0.0511, viscous Cx +11 %. Turbulence model
+is not what separates `finwake` from the Gmsh family; the finwake convex
+bevel stays attached for a reason SA does not reproduce either.
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
