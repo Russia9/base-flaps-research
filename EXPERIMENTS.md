@@ -673,6 +673,68 @@ cylinder friction 0.0573 vs 0.0511, viscous Cx +11 %. Turbulence model
 is not what separates `finwake` from the Gmsh family; the finwake convex
 bevel stays attached for a reason SA does not reproduce either.
 
+### s17–s23: second sector queue, prepared 2026-11-06 (not started)
+All clone `gm_arc_M1.6_s13_sector` (one change each, `endTime 2000`), to run
+back to back with `scripts/run_queue.sh` in the order below (cheapest and
+most informative first, the 31 M-cell full mesh last). Times assume 3.3 s/it
+per million sector cells on 12 ranks. Pass bands are s13's unless stated.
+
+### s17: Reynolds number of the MDAC tunnel
+Case `gm_arc_M1.6_s17_re`: `pInf` 28536.7 → 79278.6 Pa, so Re_D 0.84e6 →
+2.33e6 (MDAC 7.0e6/ft × 4 in); `omegaInf` follows (595460). Same mesh, so
+y⁺ rises ×2.8 (wall average ~1.3, nose-tip maximum ~20): to be read from
+`yPlus` before trusting wall-sensitive numbers; a 1 µm first cell is the
+follow-up if the roll moves. September's Re test (snappy, bevel attached)
+moved the roll < 2 %; on the Gmsh mesh the bevel separation decides the
+sign, and the bevel sits inside the body's boundary layer, whose thickness
+the Reynolds number sets. 2.84 M cells, ~5.5 h.
+Hypothesis: if the separation is Re-sensitive, the roll moves by more than
+0.0005; if not, Re is cleared for the whole comparison.
+Result: *pending*
+
+### s18: far-field radius alone
+Case `gm_arc_M1.6_s18_rfarclean`: `rFar 1200` with `hFar 120` (scaled with
+the radius, so the far zone's circumferential count stays at s13's: far
+zone 0.448 M vs 0.434 M full-mesh cells, only the radial ramp grows). s14
+changed both the radius and the far seams' cell size and oscillated. 2.83 M
+cells, ~5.5 h.
+Hypothesis: s13's steady −0.00218 returns if s14's oscillation came from
+the finer far seams; it oscillates if the boundary distance itself matters.
+Result: *pending*
+
+### s22: Ma 2.5 on the sector
+Case `gm_arc_M1.6_s22_M2p5`: `create_case.py --Mach 2.5` (UInf 850.66 m/s,
+kInf/omegaInf recomputed). Report fin-only roll at Ma 2.5 (CX5C04)
+C_ℓ −0.0056, i.e. Mx +0.0056; the report's roll magnitude has a minimum at
+Ma 1.6, so a second Mach point tests whether the sign problem is a Ma 1.6
+feature. Same mesh, ~5.5 h.
+Hypothesis: the Gmsh family keeps the wrong sign at Ma 2.5 too (the TE
+bevel separation is set by the base expansion, which is Mach-weak), or
+flips, which would make Ma 1.6 the special case the report also shows.
+Result: *pending*
+
+### s23: Ma 3.0 on the sector
+Case `gm_arc_M1.6_s23_M3p0`: `--Mach 3.0` (UInf 1020.79 m/s). Report
+fin-only at Ma 3.0: C_ℓ −0.0192, Mx +0.0192, the largest fin-only value in
+the dataset. Same mesh, ~5.5 h.
+Hypothesis: as s22; a large positive target makes a sign error unmistakable.
+Result: *pending*
+
+### s19–s21: uniform refinement ladder on the sector
+`gmshParams` `coarsen` (new): every size cap is multiplied by it, the 3 µm
+wall stacks and the seam/LE end conditions stay, so the ladder refines
+everything off the wall uniformly. Ratio 1.25 per step:
+- s19 `gm_arc_M1.6_s19_k125`: coarsen 1.25, 7.91 M full → 1.98 M cells, ~4 h
+- s13: coarsen 1.0, 11.32 M → 2.84 M (done)
+- s20 `gm_arc_M1.6_s20_k080`: coarsen 0.8, 18.53 M → 4.63 M, ~8.5 h
+- s21 `gm_arc_M1.6_s21_k063`: coarsen 0.63, 31.44 M → 7.86 M, ~14.5 h; the
+  31 M full mesh goes through Gmsh, gmshToFoam and subsetMesh before the
+  cut (s15's 16 M did), so this one runs last.
+Hypothesis: the Gmsh family's −0.0022 is grid-converged (Richardson over
+four points), or it drifts towards the finwake value with refinement,
+which would make the gap a resolution question after all.
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
