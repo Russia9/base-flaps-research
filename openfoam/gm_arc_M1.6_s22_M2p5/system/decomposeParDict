@@ -1,0 +1,36 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2512                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      decomposeParDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+numberOfSubdomains 12;
+
+method          scotch;
+
+// Periodic sector: both sides of the cyclicAMI pair stay on one processor
+// (rebuild-mesh.sh writes the faceSet wedgeFaces). HiSA evaluates boundary
+// fields with blocking communication, which OpenFOAM refuses for an AMI
+// split across processors ("Can only evaluate distributed AMI with
+// nonBlocking").
+constraints
+{
+    sector
+    {
+        type    singleProcessorFaceSets;
+        sets    ((wedgeFaces -1));
+    }
+}
+
+
+// ************************************************************************* //
