@@ -690,7 +690,17 @@ sign, and the bevel sits inside the body's boundary layer, whose thickness
 the Reynolds number sets. 2.84 M cells, ~5.5 h.
 Hypothesis: if the separation is Re-sensitive, the roll moves by more than
 0.0005; if not, Re is cleared for the whole comparison.
-Result: *pending*
+**Result (2026-11-10): Re-sensitive, the wrong way.** 2000 its, 5.5 h, Mx
+−0.00410 (p −0.00399, v −0.00011), steady from it. 1000 (±0.00001): the
+wrong-sign roll doubles against s13's −0.00218. Cx 0.6239 (p 0.5509,
+v 0.0730): friction down 18 % as Re demands, base C_Ab 0.206 up from 0.198.
+Fin split: concave flat −0.0733 (s13 −0.0713), convex flat +0.0549 (same),
+concave TE −0.0399 (−0.0382), convex TE +0.0422 (+0.0402), LE ±0.001. The
+convex TE bevel still separates (Cf_x −0.3 … −0.7·10⁻³ over the last 4 mm,
+weaker than at low Re but the same sign). So on this mesh the roll moves
+by 0.002 between the two tunnels' Reynolds numbers, away from the report:
+Re is not cleared, and the MDAC comparison should use s17's conditions.
+y⁺ not yet read (wall average expected ~1.3).
 
 ### s18: far-field radius alone
 Case `gm_arc_M1.6_s18_rfarclean`: `rFar 1200` with `hFar 120` (scaled with
@@ -700,7 +710,15 @@ changed both the radius and the far seams' cell size and oscillated. 2.83 M
 cells, ~5.5 h.
 Hypothesis: s13's steady −0.00218 returns if s14's oscillation came from
 the finer far seams; it oscillates if the boundary distance itself matters.
-Result: *pending*
+**Result (2026-11-10): steady, −0.00181.** 2,838,166 cells, 2000 its,
+5.4 h. Mx −0.00181 (p −0.00168, v −0.00013), flat from it. 1000 (±0.00002);
+Cx 0.6292, base 0.198, all unchanged. So s14's oscillation came from the far
+zone's finer seams (the far side of every P seam was no longer the coarse
+side), not from the boundary distance. The radius alone moves Mx by +0.0004:
+both flat fin sides lose ~2 % (concave −0.0698 vs −0.0713, convex +0.0537 vs
++0.0548), bevels unchanged. Within the s13 band for Cx, at its edge for Mx;
+`rFar 1200` with `hFar` scaled is the safer far field from here on, and s14
+is superseded.
 
 ### s22: Ma 2.5 on the sector
 Case `gm_arc_M1.6_s22_M2p5`: `create_case.py --Mach 2.5` (UInf 850.66 m/s,
@@ -711,7 +729,23 @@ feature. Same mesh, ~5.5 h.
 Hypothesis: the Gmsh family keeps the wrong sign at Ma 2.5 too (the TE
 bevel separation is set by the base expansion, which is Mach-weak), or
 flips, which would make Ma 1.6 the special case the report also shows.
-Result: *pending*
+**Result (2026-11-10): right sign, inside the band.** 2000 its, 5.5 h, Mx
+**+0.01204** (p +0.01204, v −0.00001), steady from it. 1000 (±0.00001).
+Report fin-only at Ma 2.5: CX5C04 −0.0056 (φ 0), CX5C05 −0.0113 (22.5),
+CX5C06 −0.0171 (45), i.e. Mx +0.0056 … +0.0171: s22 sits in the middle.
+Axial: Cx 0.4669 (p 0.3978, v 0.0691) against MDAC C_A 0.459 (C_Af 0.374,
+C_Ab 0.085); ours C_Af 0.327, C_Ab 0.140, so the total matches to 2 % and
+the base is again too high (base Cp −0.146 at r = 25 mm). Fin split: the LE
+bevels shrink to ±0.082 (±0.12 at Ma 1.6), the flat sides nearly cancel
+(concave −0.0085, convex +0.0188), the TE bevels cancel (−0.0184/+0.0192);
+the roll comes from the flat convex side. The TE map shows both bevels
+reattaching 2–4 mm before the TE at r < 65 mm (Cf_x +0.4 … +1.7·10⁻³),
+unlike Ma 1.6 where both stay separated to the edge.
+So the Gmsh sector gets the roll right at Ma 2.5 and wrong at Ma 1.6. The
+review (Sharma & Kumar, Table IV) lists CFD roll reversals at Ma 1.4–1.9
+for refs 1, 19, 20, 21 where the tests show ~1.0: our Ma 1.6 sign error
+looks like that known CFD shift of the reversal Mach number, not a mesh
+defect. Next: locate the CFD crossover (Ma 1.9, 2.2 on the sector).
 
 ### s23: Ma 3.0 on the sector
 Case `gm_arc_M1.6_s23_M3p0`: `--Mach 3.0` (UInf 1020.79 m/s). Report
