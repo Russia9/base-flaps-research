@@ -806,6 +806,26 @@ Conclusion: the next mesh lever is the wall-normal distribution beyond
 the stack (a 1.2 growth continued to ~1 mm, or `hWall` 1.0 and the fins'
 `hFinSpan` lower), tested on the sector before any further physics step.
 
+### s24–s26: Mach sweep on the sector (2026-11-11)
+User's request after s22/s23: more Mach numbers to compare with the report.
+Convention as s22/s23: `create_case.py --Mach` with p∞ and T∞ fixed, so Re_D
+scales with Mach (0.84e6 × Ma/1.6); `purgeWrite 2` (disk). Targets are the
+MDAC fin-only series CX5C04/05/06 at φ = 0/22.5/45, in our sign (Mx = −C_ℓ).
+- s24 `gm_arc_M1.6_s24_M1p9`: Ma 1.9 from s13. No fin-only data at 1.9
+  (LaRC total CT9S08 +0.0136); locates the CFD crossover with s25.
+- s25 `gm_arc_M1.6_s25_M2p2`: Ma 2.2 from s13. Same purpose.
+- s26 `gm_arc_M1.6_s26_M1p2`: Ma 1.2 from **s18** (rFar 1.2 m, hFar 120):
+  at Ma 1.2 the nose wave meets a 0.6 m boundary at x ≈ 0.4 m and its
+  reflection would reach the fins (Mach angle 56°); with 1.2 m it returns
+  behind the base. Fin-only targets Mx +0.0250 / +0.0266 / +0.0218,
+  totals +0.0305 / +0.0440 / +0.0292; MDAC C_A at 1.2 from the A-charts.
+  The 21° sharp nose has a detached shock below Ma ≈ 1.25, so a subsonic
+  pocket sits ahead of the tip.
+Hypothesis: Mx crosses zero between 1.6 and 2.5 (s24/s25 bracket it) and is
+large and positive at 1.2 if the CFD reversal is a shift rather than a
+sign error over the whole supersonic range.
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
