@@ -529,6 +529,8 @@ Re-scored at Ma 1.6:
 | Gmsh `gm_arc_M1.6`, s06, s08, s09 | −0.0020 … −0.0022 | wrong sign, fail |
 | Gmsh sector s13 (= full body) | −0.0022 | wrong sign, fail |
 | s14 rFar 1.2 m / s15 growth 1.2 / s16 SA | −0.0007 (oscillating) / −0.0017 / −0.0004 | wrong sign, fail |
+| s17 Re 2.33e6 / s18 rFar clean / s19 coarse / s21 fine | −0.0041 / −0.0018 / −0.0004 / −0.0020 | wrong sign, fail |
+| s22 Ma 2.5 / s23 Ma 3.0 (targets +0.0056…+0.0171 / +0.0192…+0.0253) | +0.0120 / +0.0149 | right sign: pass / 77 % |
 
 The open question is unchanged: snappy keeps the convex TE bevel attached and
 lands in the band; Gmsh separates both bevels (s07, s08) and gets the wrong
@@ -752,7 +754,19 @@ Case `gm_arc_M1.6_s23_M3p0`: `--Mach 3.0` (UInf 1020.79 m/s). Report
 fin-only at Ma 3.0: C_ℓ −0.0192, Mx +0.0192, the largest fin-only value in
 the dataset. Same mesh, ~5.5 h.
 Hypothesis: as s22; a large positive target makes a sign error unmistakable.
-Result: *pending*
+**Result (2026-11-11): right sign, 23 % low.** 2000 its, 5.4 h, Mx
+**+0.01487** (p +0.01486), steady from it. 1000 (±0.00001). Report fin-only
+at Ma 3.0: CX5C04 −0.0192 (φ 0), CX5C05 −0.0253, CX5C06 −0.0243, i.e. Mx
++0.0192 … +0.0253: ours is 77 % of the φ = 0 value, just below the band.
+Axial: Cx 0.4060 against MDAC C_A 0.403 (C_Af 0.343, C_Ab 0.060); ours
+C_Af 0.293, C_Ab 0.113: total within 1 %, base again ~0.05 too high and the
+forebody correspondingly low. Fin split: LE ±0.070, flat −0.0062/+0.0207,
+TE −0.0141/+0.0147; both TE bevels reattached from 2.25 mm before the TE.
+Mach trend of the Gmsh sector (fin-only report in brackets): Ma 1.6
+−0.0022 (+0.0094), Ma 2.5 +0.0120 (+0.0056 … +0.0171), Ma 3.0 +0.0149
+(+0.0192 … +0.0253). The CFD crossover lies between 1.6 and 2.5; the
+report's fin-only roll is positive (our sign) from Ma 0.8 up. Reference
+runs at Ma 1.9 and 2.2 would locate it.
 
 ### s19–s21: uniform refinement ladder on the sector
 `gmshParams` `coarsen` (new): every size cap is multiplied by it, the 3 µm
@@ -767,7 +781,30 @@ everything off the wall uniformly. Ratio 1.25 per step:
 Hypothesis: the Gmsh family's −0.0022 is grid-converged (Richardson over
 four points), or it drifts towards the finwake value with refinement,
 which would make the gap a resolution question after all.
-Result: *pending*
+**Result (2026-11-11): not grid-converged; the off-wall boundary layer is
+the weak point.** s20 (coarsen 0.8) did not mesh: `stitchMesh` aborted in
+`polyTopoChange::compactAndReorder` on `seam_far_20` (a far end-cap disk,
+309 master faces against 5300 slave; the other 11 seams stitched), the
+stitcher's known fragility rather than a layout error; s19 and s21 ran.
+
+| coarsen | sector cells | s/it | Cx | Cx_p | Cx_v | cylinder Cx | Mx (last 100) | last-300 Mx range |
+|---|---|---|---|---|---|---|---|---|
+| 1.25 (s19) | 1.98 M | 6.4 | 0.6162 | 0.5365 | 0.0797 | 0.0441 | −0.00040 | ±0.00002 |
+| 1.0 (s13) | 2.84 M | 9.7 | 0.6293 | 0.5402 | 0.0892 | 0.0508 | −0.00218 | ±0.00002 |
+| 0.63 (s21) | 7.88 M | 39.7 | 0.6468 | 0.5411 | 0.1058 | 0.0626 | −0.00199 | −0.0036 … −0.0008 |
+
+The pressure force is converged (0.5365/0.5402/0.5411), the viscous force
+is not: +12 % then +19 % per step, almost all on the cylinder (0.044 →
+0.051 → 0.063) and the fins' flat sides (concave −0.069/−0.071/−0.077).
+The 3 µm stack ends at 0.59 mm and the axial/outer-BL cap `hWall 2.0`
+(scaled by coarsen) leaves ~6 cells across the 12 mm body boundary layer
+at coarsen 1; the fin root sits inside that layer. Mx is non-monotonic
+(−0.0004 / −0.0022 / −0.0020) and the fine run oscillates (±0.0014),
+so no Richardson estimate is possible; the roll at Ma 1.6 is a residual
+of terms that each move by 0.002–0.008 with the off-wall resolution.
+Conclusion: the next mesh lever is the wall-normal distribution beyond
+the stack (a 1.2 growth continued to ~1 mm, or `hWall` 1.0 and the fins'
+`hFinSpan` lower), tested on the sector before any further physics step.
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
