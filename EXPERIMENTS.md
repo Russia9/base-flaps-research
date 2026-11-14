@@ -859,6 +859,26 @@ brackets:
   MDAC within 2 % at 1.6, 2.5, 3.0.
 `results/gm_arc_M1.6_s2[4-6]_*/`.
 
+### s27–s29 and the s26 extension, queued 2026-11-14
+- s27 `gm_arc_M1.6_s27_growth11`: s13 with `growth 1.1` (the growth beyond
+  every stack and end condition; the 3 µm/1.4 stack itself unchanged). The
+  ladder (s19–s21) left the viscous force unconverged with the cells beyond
+  the 0.6 mm stack as the suspect; `hWall 1.0` was the alternative (22.8 M
+  full, 5.7 M sector) and growth 1.1 is the targeted one: 17.7 M full →
+  4.4 M sector, ~8 h. Pass: Cx_v and cylinder Cx within 3 % of s13 means
+  the off-stack cells were not it; a move of Mx by > 0.002 reopens the mesh.
+- s28 `gm_arc_M1.6_s28_M2p5_re`, s29 `gm_arc_M1.6_s29_M3p0_re`: s22 / s23
+  with p∞ set for Re_D 2.33e6 (50,740 / 42,282 Pa; MDAC 7.0e6/ft at every
+  Mach), omegaInf recomputed. With s17 (Ma 1.6) this is the Re-matched
+  curve against the fin-only data; the sweep so far let Re_D drift with
+  Mach (1.31e6 at 2.5, 1.58e6 at 3.0). ~5.5 h each.
+- s26 extension: `endTime 4000`, `run-simulation.sh --resume` after the
+  queue (the resumed part lands in `postProcessing/forces/2000`); the Ma
+  1.2 roll wandered by ±0.004 over the last 300 of 2000 its.
+All with `purgeWrite 2`. Server disk was at 90 % (38 GB free); pruning the
+old processor snapshots is left to the user (the agent's delete was blocked).
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
