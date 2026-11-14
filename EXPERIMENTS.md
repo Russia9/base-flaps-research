@@ -531,6 +531,7 @@ Re-scored at Ma 1.6:
 | s14 rFar 1.2 m / s15 growth 1.2 / s16 SA | −0.0007 (oscillating) / −0.0017 / −0.0004 | wrong sign, fail |
 | s17 Re 2.33e6 / s18 rFar clean / s19 coarse / s21 fine | −0.0041 / −0.0018 / −0.0004 / −0.0020 | wrong sign, fail |
 | s22 Ma 2.5 / s23 Ma 3.0 (targets +0.0056…+0.0171 / +0.0192…+0.0253) | +0.0120 / +0.0149 | right sign: pass / 77 % |
+| Mach sweep s26 / s24 / s25 (Ma 1.2 / 1.9 / 2.2) | +0.0020 (unsteady) / −0.0060 / +0.0044 | CFD crossover ≈ Ma 2.05; Ma 1.2 target +0.025 |
 
 The open question is unchanged: snappy keeps the convex TE bevel attached and
 lands in the band; Gmsh separates both bevels (s07, s08) and gets the wrong
@@ -824,7 +825,39 @@ MDAC fin-only series CX5C04/05/06 at φ = 0/22.5/45, in our sign (Mx = −C_ℓ)
 Hypothesis: Mx crosses zero between 1.6 and 2.5 (s24/s25 bracket it) and is
 large and positive at 1.2 if the CFD reversal is a shift rather than a
 sign error over the whole supersonic range.
-Result: *pending*
+**Result (2026-11-12): the crossover is at Ma ≈ 2.05, and Ma 1.2 is small.**
+2000 its each (5.9 / 6.5 / 7.2 h). The whole sector sweep, our sign, mean of
+the last 100 its, report fin-only CX5C04/05/06 at φ 0 / 22.5 / 45 in
+brackets:
+
+| Ma | Mx | steady? | Cx | C_Ab | fin LE / flat / TE (concave, convex) | report fin-only |
+|---|---|---|---|---|---|---|
+| 1.2 (s26) | +0.0020 | no: −0.0021 … +0.0067, means +0.0020 … +0.0037 | 0.672 | 0.219 | +0.106/−0.090, −0.275/+0.260, −0.051/+0.054 | [+0.0250 / +0.0266 / +0.0218] |
+| 1.6 (s13) | −0.0022 | yes | 0.629 | 0.198 | +0.124/−0.112, −0.071/+0.055, −0.038/+0.040 | [+0.0094 / +0.0057 / +0.0130] |
+| 1.9 (s24) | −0.0060 | yes | 0.579 | 0.176 | +0.122/−0.113, −0.017/−0.000, −0.029/+0.031 | [—] |
+| 2.2 (s25) | +0.0044 | yes | 0.512 | 0.154 | +0.099/−0.095, −0.008/+0.008, −0.022/+0.023 | [—] |
+| 2.5 (s22) | +0.0120 | yes | 0.467 | 0.140 | +0.083/−0.082, −0.008/+0.019, −0.018/+0.019 | [+0.0056 / +0.0113 / +0.0171] |
+| 3.0 (s23) | +0.0149 | yes | 0.406 | 0.113 | +0.070/−0.070, −0.006/+0.021, −0.014/+0.015 | [+0.0192 / +0.0253 / +0.0243] |
+
+- The CFD curve has a negative dip from Ma 1.6 to 1.9 (minimum −0.0060 at
+  1.9) and crosses zero between 1.9 and 2.2 (≈ 2.05 by interpolation); the
+  report's fin-only roll is positive throughout, with its own magnitude
+  minimum at 1.6–2.5. So the CFD "reversal" sits about 1 Mach above the
+  tests, as in the review's refs 19–21.
+- Ma 1.2: Cx 0.672 with base 0.219; the flat sides carry ±0.27 each and
+  cancel to −0.015, the LE bevels +0.017, TE +0.003; the sum +0.002 against
+  +0.025 measured, and the signal wanders by ±0.004 (both TE bevels fully
+  separated, Cf_x −0.8 … −2.3·10⁻³; detached nose shock). Not converged
+  enough to call a value; a longer run or a smaller pseudo-CFL would be
+  needed before using it.
+- Through the sweep the LE bevel pair shrinks monotonically (+0.124 →
+  +0.070) and cancels better; the flat-side net turns from −0.016 (1.6)
+  through −0.017 (1.9) to 0 (2.2) and +0.011 (2.5), which is the sign
+  change; the TE bevels reattach from Ma 2.2 up (Cf_x > 0 at 3.75 mm).
+- Base drag is too high at every Mach (0.219/0.198/0.176/0.154/0.140/0.113
+  against MDAC 0.150 at 1.6, 0.085 at 2.5, 0.060 at 3.0); the totals match
+  MDAC within 2 % at 1.6, 2.5, 3.0.
+`results/gm_arc_M1.6_s2[4-6]_*/`.
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
