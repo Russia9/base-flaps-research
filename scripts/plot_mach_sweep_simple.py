@@ -25,7 +25,7 @@ for ds in ("CX5C04", "CX5C05", "CX5C06"):          # fin-only at phi = 0, 22.5, 
 bm = sorted(by); blo = [min(by[m]) for m in bm]; bhi = [max(by[m]) for m in bm]
 plt.rcParams.update({"font.size": 11, "axes.spines.top": False, "axes.spines.right": False, "axes.grid": True,
                      "grid.color": "#e4e3de", "axes.edgecolor": "#c8c7c0"})
-fig, ax = plt.subplots(figsize=(7.5, 4.6))
+fig, ax = plt.subplots(figsize=(7.5, 5.2))
 ax.axhline(0, color="#8a8984", lw=0.8, ls=(0, (3, 4)))
 ax.plot(*zip(*tot), "-o", color="#1baf7a", lw=1.8, ms=5, label="experiment, total roll (MDAC)")
 ax.fill_between(bm, blo, bhi, color="#eb6834", alpha=0.18, lw=0, label="fin-only roll, scatter over roll angle φ = 0, 22.5, 45°")
@@ -34,5 +34,5 @@ ax.plot([m for m, _ in sweep], [last100(c) for _, c in sweep], "-o", color="#2a7
 ax.set_xlabel("Mach number"); ax.set_ylabel("rolling moment coefficient at α = 0")
 ax.set_xlim(0.7, 3.1); ax.set_xticks([0.8, 1.0, 1.2, 1.6, 1.9, 2.2, 2.5, 3.0])
 ax.set_title("Wrap-around fins B1F1: induced roll vs Mach (preliminary)", loc="left", fontsize=12)
-ax.legend(frameon=False, loc="lower left", fontsize=9.5)
+ax.legend(frameon=False, fontsize=9.5, loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=2)
 fig.tight_layout(); fig.savefig(out, dpi=200); print("wrote", out)
