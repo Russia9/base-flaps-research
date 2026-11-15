@@ -17,7 +17,7 @@ sweep = [(1.2, "gm_arc_M1.6_s26_M1p2"), (1.6, "gm_arc_M1.6_s13_sector"), (1.9, "
 with open(root / "literature" / "B1_B1F1_digitized.csv") as fh:
     lit = [r for r in csv.DictReader(fh) if r["valid"] == "1"]
 def series(ds, q):
-    return sorted((float(r["Mach"]), -float(r["value"])) for r in lit if r["dataset"] == ds and r["quantity"] == q)
+    return sorted((float(r["Mach"]), float(r["value"])) for r in lit if r["dataset"] == ds and r["quantity"] == q)   # report sign, C_l
 fin, tot = series("CX5C04", "Cl_a0_fin"), series("DX5B04", "Cl_a0")
 by = {}
 for ds in ("CX5C04", "CX5C05", "CX5C06"):          # fin-only at phi = 0, 22.5, 45
@@ -30,8 +30,8 @@ ax.axhline(0, color="#8a8984", lw=0.8, ls=(0, (3, 4)))
 ax.plot(*zip(*tot), "-o", color="#1baf7a", lw=1.8, ms=5, label="experiment, total")
 ax.fill_between(bm, blo, bhi, color="#eb6834", alpha=0.18, lw=0, label=r"experiment, fins only, on different $\varphi$")
 ax.plot(*zip(*fin), "-o", color="#eb6834", lw=1.8, ms=5, label="experiment, fins only")
-ax.plot([m for m, _ in sweep], [last100(c) for _, c in sweep], "-o", color="#2a78d6", lw=2.2, ms=6, label="CFD")
-ax.set_xlabel("Mach number"); ax.set_ylabel(r"$M_x$, $\alpha = 0$")
+ax.plot([m for m, _ in sweep], [-last100(c) for _, c in sweep], "-o", color="#2a78d6", lw=2.2, ms=6, label="CFD")   # C_l = -Mx
+ax.set_xlabel("Mach number"); ax.set_ylabel(r"$C_\ell$, $\alpha = 0$")
 ax.set_xlim(0.7, 3.1); ax.set_xticks([0.8, 1.0, 1.2, 1.6, 1.9, 2.2, 2.5, 3.0])
 ax.legend(frameon=False, fontsize=9.5, loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=4)
 fig.tight_layout(); fig.savefig(out, dpi=200); print("wrote", out)
