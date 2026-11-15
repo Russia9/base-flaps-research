@@ -901,6 +901,26 @@ friction −10 % as Re demands), base 0.143. So the Re sensitivity found at
 Ma 1.6 (s17, −0.0022 → −0.0041) is confined to the separated-bevel regime.
 s29 and the s26 extension: *pending*.
 
+### s30–s33: edge shape and fin-passage resolution on the sector, queued 2026-11-15
+Prompted by the review's "the edge shape has a significant effect on the
+roll moment" and the s12 result read the same day (rounded LE apex r =
+0.16 mm: Mx −0.0021 → −0.0067 on the full body). All from s13 unless stated,
+`purgeWrite 2`, run after the s29 solve and the s26 extension finish.
+- s30 `gm_arc_M1.6_s30_leround`: `finLERadius 0.16`, `hLERound 0.07` (the
+  report's LE apex; TE apex still sharp, its base-rim layout is pending).
+  12.52 M full → 3.13 M sector, ~6.5 h. Expect −0.0067 if the sector
+  reproduces s12.
+- s31 `gm_arc_M1.6_s31_M2p5_leround`: s22 (Ma 2.5) with the same LE round.
+  Decides whether the Ma 2.5 pass (+0.0120 in +0.0056 … +0.0171) survives
+  the report's real edge.
+- s32 `gm_arc_M1.6_s32_finspan12`: `hFinSpan 1.2` (cells inside the 6 mm
+  wrap: span, thickness, tip cap; the review's "fin tips and fin-body
+  juncture"). 11.70 M full → 2.92 M sector, ~6 h.
+- s33 `gm_arc_M1.6_s33_slab15`: `hSlabOuter 1.5` (the fin passage outside
+  the wraps, where the LE shocks cross and reflect on the neighbouring fin,
+  the review's Fig. 8–9). 23.58 M full → 5.89 M sector, ~10 h.
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
