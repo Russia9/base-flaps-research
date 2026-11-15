@@ -877,7 +877,18 @@ brackets:
   1.2 roll wandered by ±0.004 over the last 300 of 2000 its.
 All with `purgeWrite 2`. Server disk was at 90 % (38 GB free); pruning the
 old processor snapshots is left to the user (the agent's delete was blocked).
-Result: *pending*
+**s27 result (2026-11-15): the off-stack growth is cleared.** 4,433,042
+cells, 2000 its in 8.9 h. Cx 0.6236 (p 0.5335, v 0.0901), Mx −0.00188
+(steady). Against s13: Cx_v +1 % (cylinder 0.0511 vs 0.0508, fins 0.0267
+vs 0.0260), so the cells beyond the stack are not what moved the viscous
+force in the ladder; that leaves the wall-parallel spacing (axial `hWall`,
+circumferential `nTheta`), which coarsen also scaled. The base fell 0.198 →
+0.192 and Mx rose by +0.0003; both small. Fin split unchanged to 0.0005.
+**s28 result (2026-11-15): Re is negligible at Ma 2.5.** Mx +0.01224
+against s22's +0.01204 (steady, ±0.0001); Cx 0.4626 (p 0.4007, v 0.0619:
+friction −10 % as Re demands), base 0.143. So the Re sensitivity found at
+Ma 1.6 (s17, −0.0022 → −0.0041) is confined to the separated-bevel regime.
+s29 and the s26 extension: *pending*.
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
