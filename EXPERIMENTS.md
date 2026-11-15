@@ -500,7 +500,18 @@ Hypothesis: the round changes the LE bevel roll by a few percent (the LE
 bow shock is detached either way), and the TE separation, which decides
 the sign, is unaffected. Baseline `gm_arc_M1.6`: Mx −0.00204, LE +0.01319,
 flat −0.01717, TE +0.00194.
-Result: *pending*
+**Result (read 2026-11-15; the run ended at it. 1659 on 2026-11-02 and was
+never collected): the 0.16 mm LE radius moves the roll by −0.0045.** Mx
+−0.00670 (flat from it. 1200, ±0.00003) against the sharp-LE baseline's
+−0.00211 (it. 1754). Cx 0.6300 vs 0.6303. The whole change is on the LE
+bevels: concave +0.1128 (sharp +0.1257), convex −0.1029 (sharp −0.1125),
+net +0.0099 vs +0.0132; the flat sides and the TE bevels move by < 0.0003.
+So the report's apex radius, 2 % of the fin thickness, shifts the roll by
+half the full-body target, and in the wrong direction. The review (Sharma
+& Kumar) says the same in words: "the edge shape has a significant effect
+on the roll moment of the wraparound fins". Every sector case s13–s29 uses
+the sharp LE (`finLERadius 0`). The TE apex (also r = 0.16 mm in the report)
+is still sharp in both families; its layout was deferred (see above).
 
 ### Target change (2026-10-21): compare the fin-only roll
 The report's own data (user-digitized B1F1 in `literature/`) show:
