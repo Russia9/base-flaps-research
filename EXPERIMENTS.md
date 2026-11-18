@@ -899,7 +899,14 @@ circumferential `nTheta`), which coarsen also scaled. The base fell 0.198 →
 against s22's +0.01204 (steady, ±0.0001); Cx 0.4626 (p 0.4007, v 0.0619:
 friction −10 % as Re demands), base 0.143. So the Re sensitivity found at
 Ma 1.6 (s17, −0.0022 → −0.0041) is confined to the separated-bevel regime.
-s29 and the s26 extension: *pending*.
+**s29 result (2026-11-15): Re is negligible at Ma 3.0 too.** Mx +0.01488
+against s23's +0.01487 (steady); Cx 0.4034 (p 0.3472, v 0.0562).
+**s26 extension (2026-11-15): Ma 1.2 settles at about +0.0022.** Its.
+2000–4000 from raw `postProcessing/forces/2000/moment.dat` on the server
+(`post_process.py` reads only `forces/0`, so `results/` still holds the
+2000-it file): 100-it means +0.0021 … +0.0027 over the last 1000 its,
+instantaneous +0.0005 … +0.0034 over the last 300, Cx ≈ 0.675. Against
++0.025 measured: an order of magnitude low, no longer a convergence question.
 
 ### s30–s33: edge shape and fin-passage resolution on the sector, queued 2026-11-15
 Prompted by the review's "the edge shape has a significant effect on the
@@ -919,7 +926,35 @@ roll moment" and the s12 result read the same day (rounded LE apex r =
 - s33 `gm_arc_M1.6_s33_slab15`: `hSlabOuter 1.5` (the fin passage outside
   the wraps, where the LE shocks cross and reflect on the neighbouring fin,
   the review's Fig. 8–9). 23.58 M full → 5.89 M sector, ~10 h.
-Result: *pending*
+**Result (2026-11-17, read 2026-11-19): no step fixes the sign; s33 exposes
+the body boundary layer.** 2000 its each, all steady; last-100 means:
+
+| step | cells | Cx (p / v) | Mx | reference |
+|---|---|---|---|---|
+| s30 LE round, Ma 1.6 | 3.14 M | 0.6301 (0.5407 / 0.0894) | −0.00221 | s13 −0.00218 |
+| s31 LE round, Ma 2.5 | 3.14 M | 0.4730 (0.4057 / 0.0673) | +0.01152 | s22 +0.01204 |
+| s32 `hFinSpan 1.2` | 2.93 M | 0.6300 (0.5400 / 0.0899) | −0.00263 | s13 −0.00218 |
+| s33 `hSlabOuter 1.5` | 5.90 M | 0.6492 (0.5410 / 0.1082) | −0.00337 | s13 −0.00218 |
+
+- s30 does not reproduce s12 (full body, −0.0067): the sector's LE bevel
+  pair is +0.1136 / −0.1009, net +0.0127 (sharp s13 +0.0124; s12 +0.0099).
+  Unexplained; s12's mesh predates the sector layout.
+- s31: the Ma 2.5 pass survives the report's LE apex (−4 %).
+- s33 changed more than the passage: `hSlabOuter` also caps a radial edge
+  family shared by the nose, body and fin zones (log.gmsh: nose 0.97 → 2.24 M,
+  body 2.84 → 5.94 M full-mesh cells). Friction rose on the whole body:
+  nose 0.0124 → 0.0153, cylinder 0.0508 → 0.0651, fins 0.0260 → 0.0278,
+  the same jump as s21 (0.0147 / 0.0626 / 0.0286).
+- Cf_x along the body (wallSample at it. 2000, binned in x, by q∞; no solve):
+  turbulent from the first 5 mm in s13, s16 (SA), s17, s21 and s33 (5.5·10⁻³
+  at x = 2.5 mm against 6.4 turbulent / 4.0 laminar flat plate), so there is
+  no laminar run and the body matches the LaRC trip (24 mm at our scale).
+  From x ≈ 30 mm s13 falls 20–25 % below s21/s33 and the turbulent estimate
+  (x = 325 mm: 1.65 / 2.07 / 2.17 against 2.41·10⁻³): the baseline's body
+  boundary layer is under-resolved radially beyond the stack. The fins were
+  not binned.
+So s33 is the better-resolved mesh and the baseline from here on (Cx 0.649
+against MDAC 0.640); the roll moves further the wrong way with it.
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
