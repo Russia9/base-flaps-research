@@ -956,6 +956,22 @@ the body boundary layer.** 2000 its each, all steady; last-100 means:
 So s33 is the better-resolved mesh and the baseline from here on (Cx 0.649
 against MDAC 0.640); the roll moves further the wrong way with it.
 
+### s34: MDAC freestream at Ma 1.6 on the s33 mesh (approved 2026-11-19)
+Case `gm_arc_M1.6_s34_mdac`: `create_case.py --template gm_arc_M1.6_s33_slab15`,
+then `freestreamProperties` only. T∞ 193.79 K (MDAC Tt 67.75 °F, report
+Table 3, PDF p.46; was 288.15 K) and p∞ 46,764.6 Pa: the MDAC static
+pressure 36,822.5 Pa (Pt 22.7 psia) × 101.6/80, because the report's model is
+D = 4 in and ours 80 mm. Re_D 2.32e6 (MDAC 7.0e6/ft × 4 in; the unscaled
+static pressure gives 6.97e6/ft, so the table is self-consistent). UInf
+446.47 m/s, kInf 7.475, omegaInf 486,079 (I and muRatio held). One change
+from s33: the freestream state. s17 raised p∞ alone at 288 K on the s13
+mesh (−0.0022 → −0.0041). Same 5.90 M mesh, ~12 h.
+Hypothesis: as s17, the wrong-sign roll grows with Re on the better-resolved
+mesh too (about −0.005); T∞ matters only through the Sutherland law's shape
+under an adiabatic wall, so a result within 0.0005 of an s33-plus-Re scaling
+clears temperature. Average y⁺ rises to about 1 (3 µm first cell kept).
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
