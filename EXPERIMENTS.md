@@ -972,6 +972,23 @@ under an adiabatic wall, so a result within 0.0005 of an s33-plus-Re scaling
 clears temperature. Average y⁺ rises to about 1 (3 µm first cell kept).
 Result: *pending*
 
+### s35–s36: MDAC freestream at Ma 2.5 and 3.0 on the s33 mesh (approved 2026-11-19)
+The Ma 2.5 pass and the Ma 3.0 value (s22/s23, s28/s29) were obtained on the
+s13 mesh, whose body boundary layer is under-resolved (s33); at Ma 1.6 the
+s33 mesh moved Mx by −0.0011. Both from s34, changing Mach and with it the
+MDAC state from Table 3 (PDF p.46), static pressure × 101.6/80 as in s34:
+- s35 `gm_arc_M1.6_s35_M2p5_mdac`: Ma 2.5, Tt 61.9 °F, Pt 32.35 psia →
+  T∞ 128.78 K, p∞ 16,579.0 Pa, UInf 568.68 m/s, Re_D 2.29e6.
+- s36 `gm_arc_M1.6_s36_M3p0_mdac`: Ma 3.0, Tt 57 °F, Pt 41.5 psia →
+  T∞ 102.51 K, p∞ 9,892.8 Pa, UInf 608.85 m/s, Re_D 2.30e6.
+kInf/omegaInf recomputed (I, muRatio held). T∞ near 100 K is the tunnel's
+real static temperature; Sutherland's law is at the low end of its range
+there. Same 5.90 M mesh, ~10–12 h each, queued behind s34.
+Hypothesis: the roll stays within 0.001 of s28 (+0.0122) and s29 (+0.0149),
+since Re and the LE apex were negligible at these Mach numbers; a larger
+move means the high-Mach agreement was a property of the coarser mesh.
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
