@@ -1014,6 +1014,25 @@ sits 4 % above MDAC at Ma 2.5 and 3.0 (was within 2 %), on MDAC at 1.6; the
 base stays ~0.055 above MDAC at every Mach, so the earlier 2 % agreement
 came from a low forebody friction offsetting the high base.
 
+### s37: inviscid (Euler) at Ma 1.6 on the s33 mesh (approved 2026-11-20)
+The review (Sharma & Kumar, Table IV) lists the CFD roll reversal at Ma
+1.4–1.9 for every viscous computation ([1], [19], [20], [21]; [21] is our
+setup: density-based, AUSM, second order, Sutherland) and at ~1, where the
+tests have it, only for the inviscid one ([26]). Our Ma 1.6 sign follows
+whether the TE bevels separate (s07, s16, s17).
+Case `gm_arc_M1.6_s37_euler` from s34, HiSA's inviscid recipe (its
+agard445 example; `createFields.H` switches on max(mu) = 0): `transport
+const` with `mu 0`, `simulationType laminar`, wall `U` `slip`. Mesh, schemes
+and freestream as s34; `0/k`, `omega`, `nut`, `alphat` stay but are unused.
+Hypothesis: without the boundary layer the bevels cannot separate the same
+way and Mx turns positive, towards +0.0094; then the sign error is in the
+viscous separation. A negative Mx puts it in the wave pattern itself
+(geometry, edges, fin passage). Risks: the 3 µm wall cells are needless
+and stiff for Euler; the inviscid base flow is set by numerical viscosity,
+so C_Ab is not comparable and the run may not settle; `te_map` is
+meaningless without wall shear.
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
