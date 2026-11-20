@@ -970,7 +970,16 @@ Hypothesis: as s17, the wrong-sign roll grows with Re on the better-resolved
 mesh too (about −0.005); T∞ matters only through the Sutherland law's shape
 under an adiabatic wall, so a result within 0.0005 of an s33-plus-Re scaling
 clears temperature. Average y⁺ rises to about 1 (3 µm first cell kept).
-Result: *pending*
+**Result (2026-11-19): wrong sign, larger; Cx on MDAC.** 5,899,870 cells,
+2000 its in 11.9 h, steady from it. 1000. Mx **−0.00545** (last 300:
+−0.0055 … −0.0054) against s33's −0.00337: the Re shift (−0.0021) equals
+s13 → s17 (−0.0019), so it carries over to the better mesh and T∞ adds
+nothing visible. Cx 0.6406 (p 0.5510, v 0.0896) against MDAC C_A 0.640;
+base 0.205 (MDAC 0.150), friction: nose 0.0124, cylinder 0.0548, fins
+0.0225. Fin split against s33: concave flat −0.0759 (−0.0743), concave TE
+−0.0411 (−0.0390), convex TE +0.0431 (+0.0407), LE pair and convex flat
+within 0.0013: as in s17, the change sits on the concave side and the TE
+bevels.
 
 ### s35–s36: MDAC freestream at Ma 2.5 and 3.0 on the s33 mesh (approved 2026-11-19)
 The Ma 2.5 pass and the Ma 3.0 value (s22/s23, s28/s29) were obtained on the
@@ -987,7 +996,23 @@ there. Same 5.90 M mesh, ~10–12 h each, queued behind s34.
 Hypothesis: the roll stays within 0.001 of s28 (+0.0122) and s29 (+0.0149),
 since Re and the LE apex were negligible at these Mach numbers; a larger
 move means the high-Mach agreement was a property of the coarser mesh.
-Result: *pending*
+**Result (2026-11-20): the high-Mach roll holds on the better mesh.** 2000
+its each (12.2 / 13.0 h), steady.
+
+| | Mx | earlier (s13 mesh, ours / MDAC Re) | MDAC fin-only φ 0 / 22.5 / 45 | Cx (p / v) | MDAC C_A | base |
+|---|---|---|---|---|---|---|
+| s34, Ma 1.6 | −0.00545 | −0.00218 / −0.00410 | +0.0094 / +0.0057 / +0.0130 | 0.6406 (0.5510 / 0.0896) | 0.640 | 0.205 |
+| s35, Ma 2.5 | +0.01192 | +0.01204 / +0.01224 | +0.0056 / +0.0113 / +0.0171 | 0.4784 (0.4013 / 0.0771) | 0.459 | 0.142 |
+| s36, Ma 3.0 | +0.01469 | +0.01487 / +0.01488 | +0.0192 / +0.0253 / +0.0243 | 0.4177 (0.3468 / 0.0709) | 0.403 | 0.114 |
+
+Roll: Ma 2.5 inside the band, Ma 3.0 at 77 % of φ = 0, both within 0.0003
+of the s13-mesh values; the fin split is unchanged to 0.0003. So the
+mesh/Re sensitivity of the roll is confined to Ma 1.6, where both TE bevels
+stay separated. Axial: with the resolved body layer the friction is higher
+(cylinder 0.0451 / 0.0403 against s28/s29's 0.0343 / 0.0303) and Cx now
+sits 4 % above MDAC at Ma 2.5 and 3.0 (was within 2 %), on MDAC at 1.6; the
+base stays ~0.055 above MDAC at every Mach, so the earlier 2 % agreement
+came from a low forebody friction offsetting the high base.
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
