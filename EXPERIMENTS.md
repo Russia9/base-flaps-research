@@ -1021,8 +1021,10 @@ setup: density-based, AUSM, second order, Sutherland) and at ~1, where the
 tests have it, only for the inviscid one ([26]). Our Ma 1.6 sign follows
 whether the TE bevels separate (s07, s16, s17).
 Case `gm_arc_M1.6_s37_euler` from s34, HiSA's inviscid recipe (its
-agard445 example; `createFields.H` switches on max(mu) = 0): `transport
-const` with `mu 0`, `simulationType laminar`, wall `U` `slip`. Mesh, schemes
+agard445 example; `createFields.H` switches on max(mu) = 0): Sutherland
+`As 0` (so mu = 0; the first attempt, `transport const` with `mu 0`, failed
+at startup on 2026-11-20 because const transport is not built with janaf
+thermo), `simulationType laminar`, wall `U` `slip`. Mesh, schemes
 and freestream as s34; `0/k`, `omega`, `nut`, `alphat` stay but are unused.
 Hypothesis: without the boundary layer the bevels cannot separate the same
 way and Mx turns positive, towards +0.0094; then the sign error is in the
