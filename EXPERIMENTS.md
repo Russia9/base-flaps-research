@@ -1058,6 +1058,27 @@ So at Ma 1.6 the wrong sign is in the inviscid wave pattern on the flat fin
 sides (geometry, edges, fin passage), and turbulence-model tuning (SST a1,
 EBRSM) is not expected to fix it.
 
+### s38: fin shape, Gmsh against OpenSCAD against the snappy surface (no solve, 2026-11-23)
+After s37 the question was whether the two mesh families (finwake +0.0086,
+Gmsh −0.002 … −0.005) compute the same fin. Compared, for the fin at +Y:
+`arc_M1.6_finwake/constant/triSurface/stabilizers.stl` (the OpenSCAD
+geometry finwake was meshed from), the `stabilizers` wall vertices of
+`gm_arc_M1.6_s34_mdac` (wallSample), and finwake's snapped `stabilizers`
+patch (`surfaceMeshExtract -constant`).
+**Result: the same shape in all three.**
+- Gmsh wall vertices to the OpenSCAD surface: mean 0.0002 mm, max 0.0023 mm
+  (27,543 vertices); arc angle, bow direction, bevels and root agree.
+- finwake's snapped vertices to the OpenSCAD surface: 0 to 0.06 mm for
+  r > 45 mm; up to 0.49 mm only in a strip at the root (r < 40.3 mm), where
+  body-surface faces at the junction belong to the `stabilizers` patch.
+- LE apex at x = 660.000 and TE at 800.000 at every span station in both
+  meshes: snappy did not round or shorten the edges.
+So the family split is not geometry. With s19/s13/s33/s37 the Gmsh results
+order as coarser −0.0004, baseline −0.0022, finer −0.0034, inviscid
+−0.0154: less numerical or physical dissipation gives a more negative
+roll, which makes finwake's +0.0086 look like an under-resolved result
+rather than the converged one (not shown directly).
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
