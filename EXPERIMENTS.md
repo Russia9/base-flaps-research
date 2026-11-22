@@ -1079,6 +1079,40 @@ order as coarser −0.0004, baseline −0.0022, finer −0.0034, inviscid
 roll, which makes finwake's +0.0086 look like an under-resolved result
 rather than the converged one (not shown directly).
 
+### s39: comparison with Paek et al. 1999 and the JPL test (no solve, 2026-11-23)
+`literature/Roll_Moment_WAF.pdf` (J. Spacecraft and Rockets 36:53): Euler
+on the TTCP body (fin passage, 108×33×57 + 2×65×9×11 cells) against a JPL
+wind-tunnel test (1 cal = 1.524 cm, no trips; their ref. 11, Dahlke TR
+RD-77-4). Digitized by the user: `literature/Koreans_Fig5.csv` (roll vs
+Mach: JPL, Edge's laminar Navier-Stokes, Paek), `Koreans_Fig11.csv`
+(sectional roll along the span; the M 1.5 series stops at 0.80 of the
+radius), `Koreans_Fig12.csv` (along the chord). Their sign is positive nose
+to tail, i.e. our Mx. `scripts/plot_paek_comparison.py` →
+`reports/figures/paek_comparison{,_ru}.png`.
+**Result: our CFD reproduces Paek's computation, and the JPL test has our
+sign at Ma 1.6.**
+
+| Ma | JPL | Paek Euler | ours Euler | ours SST (s13 mesh / s33 mesh) |
+|---|---|---|---|---|
+| 1.6 | −0.0108 | −0.0164 | −0.0154 (s37) | −0.0022 / −0.0055 |
+| 2.5 | — | +0.0144 | — | +0.0120 / +0.0119 |
+| 3.0 | +0.0200 (3.05) | +0.0163 | — | +0.0149 / +0.0147 |
+| crossover | ≈ 1.8 | 1.8 | — | 2.05 |
+
+- Euler against Euler at Ma 1.6: −0.0154 against −0.0164 (6 %).
+- Chordwise distribution (Fig. 12 against `wall_breakdown` in 10 mm bins,
+  as d Mx / d(x/c)): at Ma 2.5 the SST curve follows Paek's (+0.07 … +0.09
+  over the front 20 %, zero near mid-chord, −0.04 aft); at Ma 1.6 against
+  their 1.5 both show + at the LE, −0.15 … −0.2 at 0.3–0.45, a positive bump
+  near mid-chord (ours at 0.54, theirs 0.48: the Mach angle), − at 0.7 and
+  back to zero at the TE. The matching shapes also confirm the sign
+  convention and the fin's handedness.
+- So the negative roll at Ma 1.6 is what this geometry gives; it is "wrong"
+  only against the MDAC series (and AEDC/LaRC), not against JPL. The tests
+  disagree: crossover ≈ 1.0 (AEDC), ≈ 1.8 (JPL), none above 0.8 (MDAC).
+  Viscosity moves our crossover from Paek's 1.8 to 2.05 and the Ma 1.6
+  value from −0.015 towards the JPL −0.011.
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
