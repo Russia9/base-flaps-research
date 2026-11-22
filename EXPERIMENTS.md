@@ -1113,6 +1113,27 @@ sign at Ma 1.6.**
   Viscosity moves our crossover from Paek's 1.8 to 2.05 and the Ma 1.6
   value from −0.015 towards the JPL −0.011.
 
+### s40–s44: Euler Mach sweep on the s33 mesh (approved 2026-11-23)
+After s39: Paek's Euler curve covers Ma 1.2–3.0 and our Euler has one point
+(s37, Ma 1.6, within 6 %). The SST sweep disagrees with JPL and Paek at
+Ma 1.2 (+0.002 against −0.008 at 1.31 / −0.014 at 1.2); an Euler point
+there separates the turbulence model from the Ma 1.2 setup (detached nose
+shock, far field). All as s37 (Sutherland `As 0`, laminar, slip wall, no
+`yPlus`), changing Mach; the freestream state stays s34's (it does not
+enter an inviscid coefficient). Cases were made with `create_case.py` from
+s34 (it needs a non-zero viscosity for omegaInf) plus s37's four files.
+- s40 `gm_arc_M1.6_s40_euler_M1p2`: Ma 1.2, with `rFar 1200`, `hFar 120`
+  as s26 (the nose wave's reflection from a 0.6 m boundary would reach the
+  fins). Paek −0.0140.
+- s41 `gm_arc_M1.6_s41_euler_M1p9`: Ma 1.9. Paek ≈ +0.002 (crossover 1.8).
+- s42 `gm_arc_M1.6_s42_euler_M2p2`: Ma 2.2. Paek +0.0160.
+- s43 `gm_arc_M1.6_s43_euler_M2p5`: Ma 2.5. Paek +0.0144.
+- s44 `gm_arc_M1.6_s44_euler_M3p0`: Ma 3.0. Paek +0.0163.
+2000 its, ~9 h each, one queue in this order.
+Hypothesis: each within 0.003 of Paek and a crossover at 1.8–1.9. A positive
+s40 puts the Ma 1.2 disagreement in our setup, not in SST.
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
