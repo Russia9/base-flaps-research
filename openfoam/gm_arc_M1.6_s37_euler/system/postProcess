@@ -70,13 +70,7 @@ pressureCoeff
     writeControl    writeTime;
 }
 
-yPlus
-{
-    type         yPlus;
-    libs         (fieldFunctionObjects);
-    writeControl writeTime;
-    log yes;
-}
+// s37: yPlus removed, it divides by nu = 0 in the inviscid run (SIGFPE at the first step)
 
 wallShearStress
 {
