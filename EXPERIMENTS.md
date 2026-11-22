@@ -1034,7 +1034,29 @@ viscous separation. A negative Mx puts it in the wave pattern itself
 and stiff for Euler; the inviscid base flow is set by numerical viscosity,
 so C_Ab is not comparable and the run may not settle; `te_map` is
 meaningless without wall shear.
-Result: *pending*
+**Result (2026-11-22): hypothesis rejected. Inviscid Mx is −0.0154, three
+times further the wrong way.** 5,899,870 cells, 2000 its in 8.8 h; Mx flat
+from it. 400 (last 300: −0.0154 … −0.0152), Cx 0.605 wandering 0.591 … 0.624
+(the inviscid base, C_Ab 0.244). `wall_breakdown.py` failed on the uniform
+zero `wallShearStress` sample and was rerun by hand with zero shear.
+
+| fin Mx | LE pair | flat pair | TE pair | sum |
+|---|---|---|---|---|
+| s37 Euler | +0.1285 − 0.1183 = +0.0102 | −0.0808 + 0.0540 = −0.0268 | −0.0572 + 0.0584 = +0.0012 | −0.0154 |
+| s34 viscous | +0.1252 − 0.1119 = +0.0133 | −0.0759 + 0.0552 = −0.0207 | −0.0411 + 0.0431 = +0.0020 | −0.0055 |
+
+- With slip walls the TE bevels carry the full expansion (±0.058 against
+  ±0.042) and still cancel, so the bevel separation is not what sets the
+  sign: attached or separated, the TE pair nets +0.001 … +0.002.
+- The negative roll is the flat sides' net (−0.027 inviscid, −0.021
+  viscous), mainly 30–60 % chord in both and also 90–110 mm in the Euler run;
+  the LE pair is positive in both.
+- Viscosity moves Mx by +0.010 towards the tests; it is not the source of
+  the wrong sign. The review's inviscid result ([26], reversal near Ma 1) is
+  not reproduced here.
+So at Ma 1.6 the wrong sign is in the inviscid wave pattern on the flat fin
+sides (geometry, edges, fin passage), and turbulence-model tuning (SST a1,
+EBRSM) is not expected to fix it.
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
