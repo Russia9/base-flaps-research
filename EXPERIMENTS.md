@@ -1142,7 +1142,13 @@ separates us from Paek at Ma 1.2; candidates are the detached nose shock
 (21° sharp nose, detached below Ma ≈ 1.25), the far field, and an unsteady
 inviscid base. `wall_breakdown.py` failed again on the uniform shear list;
 fixed in the script (uniform `N{(...)}` lists), rerun pending the queue.
-s41–s44: *pending*
+**s41 result (2026-11-23): Ma 1.9 is still negative, −0.0073.** 2000 its in
+8.8 h, steady from it. 500 (last 300: −0.0074 … −0.0071), Cx 0.556. Paek
+is about +0.002 here (−0.0046 at 1.79, +0.0089 at 2.0), so our inviscid
+crossover lies above 1.9, later than Paek's 1.8. SST gave −0.0060 at 1.9:
+the late crossover is in our inviscid solution too, and the s39 remark that
+viscosity moves it from 1.8 to 2.05 is wrong.
+s42–s44: *pending* (s42 at it. 1100: flat at about +0.0099, Paek +0.0160)
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
