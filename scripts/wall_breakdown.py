@@ -61,6 +61,10 @@ def read_scalars(path: Path) -> list[float]:
 
 
 def read_vectors(path: Path) -> list[tuple[float, ...]]:
+    # a uniform list is written as N{(x y z)}: the inviscid runs' wallShearStress is all zeros
+    uniform = re.search(r"^(\d+)\{\(([^()]+)\)\}\s*$", path.read_text(), re.MULTILINE)
+    if uniform:
+        return [tuple(map(float, uniform.group(2).split()))] * int(uniform.group(1))
     return [tuple(map(float, v.split())) for v in re.findall(r"\(([^()]+)\)", list_body(path))]
 
 

@@ -1132,7 +1132,17 @@ s34 (it needs a non-zero viscosity for omegaInf) plus s37's four files.
 2000 its, ~9 h each, one queue in this order.
 Hypothesis: each within 0.003 of Paek and a crossover at 1.8–1.9. A positive
 s40 puts the Ma 1.2 disagreement in our setup, not in SST.
-Result: *pending*
+**s40 result (2026-11-23): positive and not settled, so Ma 1.2 is a setup
+question.** 5,902,912 cells, 2000 its in 9.8 h. Mx +0.0066 over the last
+100 its; 100-it means +0.0045 … +0.0114 from it. 300, instantaneous −0.0025
+… +0.0174 over the last 300; Cx wanders 0.61 … 0.65; the residual stays at
+~4·10⁻³ of its start. Paek has −0.0140, JPL −0.0076 at 1.31. Euler and SST
+(s26, +0.002) agree in sign here, so the turbulence model is not what
+separates us from Paek at Ma 1.2; candidates are the detached nose shock
+(21° sharp nose, detached below Ma ≈ 1.25), the far field, and an unsteady
+inviscid base. `wall_breakdown.py` failed again on the uniform shear list;
+fixed in the script (uniform `N{(...)}` lists), rerun pending the queue.
+s41–s44: *pending*
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
