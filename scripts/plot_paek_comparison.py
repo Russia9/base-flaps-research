@@ -18,7 +18,8 @@ root = Path(sys.argv[1]); out = Path(sys.argv[2]); ru = "ru" in sys.argv[3:]
 CHORD, BIN = 140.0, 10.0        # mm; wall_breakdown.py bins the fin roll in 10 mm of chord
 SWEEP = [(1.2, "s26_M1p2"), (1.6, "s13_sector"), (1.9, "s24_M1p9"), (2.2, "s25_M2p2"), (2.5, "s22_M2p5"), (3.0, "s23_M3p0")]
 FINE = [(1.6, "s34_mdac"), (2.5, "s35_M2p5_mdac"), (3.0, "s36_M3p0_mdac")]     # s33 mesh, MDAC freestream
-EULER = [(1.6, "s37_euler")]
+EULER = [(1.2, "s40_euler_M1p2"), (1.6, "s37_euler"), (1.9, "s41_euler_M1p9"), (2.2, "s42_euler_M2p2"), (2.5, "s43_euler_M2p5"),
+         (3.0, "s44_euler_M3p0")]
 T = {"jpl": "эксперимент JPL", "edge": "Edge, Навье — Стокс (ламинарный)", "paek": "Paek и др., Эйлер",
      "cfd": "расчет, k-ω SST", "fine": "расчет, k-ω SST, подробная сетка", "eul": "расчет, Эйлер",
      "mach": r"$M_\infty$", "mx": r"$m_x$, $\alpha = 0$", "chord": "относительная хорда",
@@ -76,13 +77,13 @@ ax.plot(*zip(*f5["Present"]), "-o", color=ORANGE, lw=1.6, ms=4.5, mfc="white", l
 ax.plot(*zip(*f5["JPL Experiment"]), "s", color="#1b1b1a", ms=6.5, label=T["jpl"])
 ax.plot([m for m, _ in SWEEP], [last100(c) for _, c in SWEEP], "-o", color=BLUE, lw=2.2, ms=6, label=T["cfd"])
 ax.plot([m for m, _ in FINE], [last100(c) for _, c in FINE], "D", color=BLUE, ms=7, mfc="white", mew=1.8, label=T["fine"])
-ax.plot([m for m, _ in EULER], [last100(c) for _, c in EULER], "*", color=GREEN, ms=14, mec="white", mew=0.8, label=T["eul"])
+ax.plot([m for m, _ in EULER], [last100(c) for _, c in EULER], "-*", color=GREEN, lw=1.8, ms=12, mec="white", mew=0.8, label=T["eul"])
 ax.set_xlabel(T["mach"]); ax.set_ylabel(T["mx"]); ax.set_xlim(0.5, 3.2)
 ax.legend(frameon=False, fontsize=9.5, loc="upper left")
 
 f12 = digitized("Koreans_Fig12.csv")
 for a, mach, cases in ((a1, "1.5", (("s37_euler", GREEN, T["euler"], "1.6"), ("s34_mdac", BLUE, T["sst"], "1.6"))),
-                       (a2, "2.5", (("s35_M2p5_mdac", BLUE, T["sst"], "2.5"),))):
+                       (a2, "2.5", (("s43_euler_M2p5", GREEN, T["euler"], "2.5"), ("s35_M2p5_mdac", BLUE, T["sst"], "2.5")))):
     a.plot(*zip(*f12[f"M{mach}"]), "-", color=ORANGE, lw=1.5, label=T["paekm"].format(mach))
     for case, colour, model, m in cases:
         a.plot(*chordwise(case), "-o", color=colour, lw=1.6, ms=4, label=T["ourm"].format(model, m))

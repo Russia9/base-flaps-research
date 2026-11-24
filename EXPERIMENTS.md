@@ -1148,7 +1148,30 @@ is about +0.002 here (−0.0046 at 1.79, +0.0089 at 2.0), so our inviscid
 crossover lies above 1.9, later than Paek's 1.8. SST gave −0.0060 at 1.9:
 the late crossover is in our inviscid solution too, and the s39 remark that
 viscosity moves it from 1.8 to 2.05 is wrong.
-s42–s44: *pending* (s42 at it. 1100: flat at about +0.0099, Paek +0.0160)
+**s42–s44 results (2026-11-24): positive and steady, below Paek.** 2000 its
+each, last 300 its within ±0.0001. Mx (last 100) against Paek's Euler and
+our SST:
+
+| Ma | case | Euler Mx | Paek | SST | Cx | C_Ab |
+|---|---|---|---|---|---|---|
+| 1.2 | s40 | +0.0066 (unsteady) | −0.0140 | +0.0022 (s26) | 0.653 | 0.234 |
+| 1.6 | s37 | −0.0154 | −0.0164 | −0.0055 (s34) | 0.605 | 0.244 |
+| 1.9 | s41 | −0.0073 | ≈ +0.002 | −0.0060 (s24) | 0.556 | 0.215 |
+| 2.2 | s42 | +0.0099 | +0.0160 | +0.0044 (s25) | 0.470 | 0.180 |
+| 2.5 | s43 | +0.0124 | +0.0144 | +0.0119 (s35) | 0.427 | 0.161 |
+| 3.0 | s44 | +0.0113 | +0.0163 | +0.0147 (s36) | 0.368 | 0.133 |
+
+- Hypothesis (each within 0.003 of Paek, crossover 1.8–1.9): holds at 1.6
+  and 2.5 only. Our inviscid crossover is Ma 2.03 (linear between s41 and
+  s42), Paek's 1.86 (between his 1.79 and 2.0 points): the curve is shifted
+  by about 0.17 in Mach, and 0.005 lower at Ma 3.0.
+- Our Euler and SST cross at the same Mach (2.03 / 2.05); viscosity changes
+  the magnitude (a third of the Euler value at 1.6, 1.3× at 3.0), not the
+  crossover.
+- `wall_breakdown.csv` for s37 and s40–s44 was regenerated on the server
+  with the fixed script after the queue ended.
+- Open: the shift against Paek (his ~0.2 M-cell grid, tip shape, or our
+  setup) and the Ma 1.2 setup.
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
