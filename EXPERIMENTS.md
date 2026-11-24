@@ -1173,6 +1173,25 @@ our SST:
 - Open: the shift against Paek (his ~0.2 M-cell grid, tip shape, or our
   setup) and the Ma 1.2 setup.
 
+### s45–s48: Euler at Ma 0.8, 0.9, 1.3, 1.4 (approved 2026-11-24)
+After s40–s44: the Euler curve has a gap between the unsteady positive
+Ma 1.2 point and the steady −0.0154 at 1.6, and nothing below 1.2, where
+JPL has −0.027 (Ma 0.70 and 0.86). All as s40 (Euler, `rFar 1200`,
+`hFar 120`), changing Mach only; made with `create_case.py` from s34 plus
+s40's `0/U`, thermo, turbulence, `postProcess` and `gmshParams`.
+- s48 `gm_arc_M1.6_s48_euler_M1p4`: Ma 1.4. Paek −0.0167.
+- s47 `gm_arc_M1.6_s47_euler_M1p3`: Ma 1.3. Paek ≈ −0.015 (between his 1.2
+  and 1.4 points), JPL −0.0076 at 1.31.
+- s46 `gm_arc_M1.6_s46_euler_M0p9`: Ma 0.9. JPL −0.0271 at 0.86; no Paek.
+- s45 `gm_arc_M1.6_s45_euler_M0p8`: Ma 0.8. JPL −0.027 at 0.70–0.86.
+2000 its each, one queue in this order (1.4, 1.3, 0.9, 0.8).
+Hypothesis: 1.4 steady and within 0.003 of Paek; 1.3 negative, which would
+confine the Ma 1.2 problem to the detached-shock range (below ≈ 1.25).
+The subsonic pair is exploratory: the far field is 15 D with the inlet
+10 D upstream, and a steady inviscid base flow may not settle, so an
+unsteady result there says little about the roll.
+Result: *pending*
+
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
 - s02 redo with the sleeve stopping at x = 0.80 (removes the base-region confound)
