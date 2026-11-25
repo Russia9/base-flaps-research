@@ -1208,6 +1208,10 @@ Cx 0.62 … 0.66. Paek ≈ −0.015, JPL −0.0076 at 1.31. It sits between s48
 Ma 1.6 through zero at about 1.3; the hypothesis (negative at 1.3) fails.
 s46 (Ma 0.9) at it. 500: 100-it means −0.019 … −0.025, Cx 0.26 (JPL −0.027
 at 0.86).
+**Queue stopped by hand 2026-11-25 18:01 UTC (the server was needed).** s46
+was at it. ~600; its last write is it. 500 (`processor*/500`, mesh kept).
+Resume with `./run-simulation.sh --resume openfoam/gm_arc_M1.6_s46_euler_M0p9`,
+then `wall_breakdown.py`; s45 was not started and needs the full queue.
 s45, s46: *pending*
 
 ### Planned
