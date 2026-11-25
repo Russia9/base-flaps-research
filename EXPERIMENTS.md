@@ -1200,7 +1200,14 @@ fin's shock) moves forward, 70 → 50 mm, and the rear third of the chord
 turns from negative to positive. So the positive Ma 1.2 value is the end of
 a trend that starts below 1.6, not a jump at shock detachment. Confound:
 s48 has `rFar 1200` and s37 `rFar 600`.
-s47 (Ma 1.3) at it. 1100: 100-it means between −0.001 and +0.001.
+**s47 result (2026-11-25): Ma 1.3 is about zero and not steady.** 2000 its
+in 9.4 h. Mx −0.0015 over the last 100 its, −0.0007 over the last 500;
+100-it means −0.0015 … +0.0009 from it. 500, instantaneous ±0.005;
+Cx 0.62 … 0.66. Paek ≈ −0.015, JPL −0.0076 at 1.31. It sits between s48
+(−0.003) and s40 (+0.007), so the Euler roll rises steadily from −0.015 at
+Ma 1.6 through zero at about 1.3; the hypothesis (negative at 1.3) fails.
+s46 (Ma 0.9) at it. 500: 100-it means −0.019 … −0.025, Cx 0.26 (JPL −0.027
+at 0.86).
 s45, s46: *pending*
 
 ### Planned
