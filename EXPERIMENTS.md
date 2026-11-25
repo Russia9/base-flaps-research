@@ -1190,7 +1190,18 @@ confine the Ma 1.2 problem to the detached-shock range (below ≈ 1.25).
 The subsonic pair is exploratory: the far field is 15 D with the inlet
 10 D upstream, and a steady inviscid base flow may not settle, so an
 unsteady result there says little about the roll.
-Result: *pending*
+**s48 result (2026-11-25): Ma 1.4 is −0.003 and not steady; the hypothesis
+fails.** 5,902,912 cells, 2000 its in 8.5 h. Mx −0.0028 over the last 100
+its; 100-it means drift −0.0046 … −0.0028 from it. 800, instantaneous
+±0.001 around them; Cx 0.62 … 0.65. Paek has −0.0167, JPL −0.0108 at 1.62
+and −0.0076 at 1.31. The fin roll by chord changes smoothly from s37
+(Ma 1.6) through s48 to s40 (Ma 1.2): the positive bump (the neighbour
+fin's shock) moves forward, 70 → 50 mm, and the rear third of the chord
+turns from negative to positive. So the positive Ma 1.2 value is the end of
+a trend that starts below 1.6, not a jump at shock detachment. Confound:
+s48 has `rFar 1200` and s37 `rFar 600`.
+s47 (Ma 1.3) at it. 1100: 100-it means between −0.001 and +0.001.
+s45, s46: *pending*
 
 ### Planned
 - extend finwake from it. 1000 (restart, +500–1000 its) to converge Cx / C_Ab
